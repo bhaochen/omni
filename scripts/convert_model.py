@@ -5,8 +5,8 @@ import torch
 import transformers
 import warnings
 from transformers import AutoTokenizer, AutoModelForCausalLM, Qwen3Config, Qwen3ForCausalLM, Qwen3MoeConfig, Qwen3MoeForCausalLM
-from omni.models import LMConfig, LMForCausalLM
-from omni.models.lm.lora import apply_lora, merge_lora
+from models import LMConfig, LMForCausalLM
+from models.lm.lora import apply_lora, merge_lora
 
 warnings.filterwarnings('ignore', category=UserWarning)
 

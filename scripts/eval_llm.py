@@ -4,9 +4,9 @@ import random
 import warnings
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
-from omni.models import LMConfig, LMForCausalLM
-from omni.models.lm.lora import *  # noqa: F401,F403
-from omni.utils.training import setup_seed, get_model_params
+from models import LMConfig, LMForCausalLM
+from models.lm.lora import *  # noqa: F401,F403
+from utils.training import setup_seed, get_model_params
 warnings.filterwarnings('ignore')
 
 def init_model(args):

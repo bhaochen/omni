@@ -6,8 +6,8 @@ import torch
 import random
 from PIL import Image
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
-from omni.models import VLM, VLMConfig
-from omni.utils import setup_seed, get_vlm_model_params
+from models import VLM, VLMConfig
+from utils import setup_seed, get_vlm_model_params
 warnings.filterwarnings('ignore')
 
 def init_model(args):

@@ -2,9 +2,9 @@ import argparse, os, sys, json, time, math, torch, threading, queue, base64, io,
 import numpy as np
 from PIL import Image
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from omni.models import VAM
-from omni.serve.realtime import RealtimeSession
-from omni.utils import log_model_params
+from models import VAM
+from serve.realtime import RealtimeSession
+from utils import log_model_params
 logging.getLogger().setLevel(logging.ERROR)
 
 M = {}  # model / tokenizer / device / mimi / asr / cfg

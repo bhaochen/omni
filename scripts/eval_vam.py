@@ -6,9 +6,9 @@ import warnings
 import torch
 from PIL import Image
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from omni.models import VAM, VAMConfig
-from omni.datasets import VAMDataset
-from omni.utils import setup_seed, log_model_params
+from models import VAM, VAMConfig
+from dataset import VAMDataset
+from utils import setup_seed, log_model_params
 warnings.filterwarnings('ignore')
 
 

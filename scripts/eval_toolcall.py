@@ -9,8 +9,8 @@ import torch
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
 from openai import OpenAI
-from omni.models import LMConfig, LMForCausalLM
-from omni.utils.training import setup_seed, get_model_params
+from models import LMConfig, LMForCausalLM
+from utils.training import setup_seed, get_model_params
 warnings.filterwarnings('ignore')
 
 TOOLS = [
