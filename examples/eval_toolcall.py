@@ -9,7 +9,7 @@ import torch
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
 from openai import OpenAI
-from omni.models.minimind import MiniMindConfig, MiniMindForCausalLM
+from omni.models import MiniMindConfig, MiniMindForCausalLM
 from omni.utils.training import setup_seed, get_model_params
 warnings.filterwarnings('ignore')
 

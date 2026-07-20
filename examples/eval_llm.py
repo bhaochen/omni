@@ -4,7 +4,7 @@ import random
 import warnings
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
-from omni.models.minimind import MiniMindConfig, MiniMindForCausalLM
+from omni.models import MiniMindConfig, MiniMindForCausalLM
 from omni.models.lora import *  # noqa: F401,F403
 from omni.utils.training import setup_seed, get_model_params
 warnings.filterwarnings('ignore')

@@ -19,7 +19,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from transformers import AutoTokenizer
-from omni.models.minimind import MiniMindConfig, MiniMindForCausalLM
+from omni.models import MiniMindConfig, MiniMindForCausalLM
 from omni.datasets.lm_dataset import AgentRLDataset
 from omni.utils.training import Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, SkipBatchSampler, init_model, LMForRewardModel
 from omni.trainers.rollout_engine import create_rollout_engine, compute_per_token_logps

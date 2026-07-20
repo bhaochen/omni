@@ -8,7 +8,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import Sampler
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
-from omni.models.minimind import MiniMindForCausalLM
+from omni.models import MiniMindForCausalLM
 
 
 def get_model_params(model, config):

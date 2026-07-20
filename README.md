@@ -14,8 +14,10 @@ Omni 是一个以 **多模态 (omni)** 为目标的 LLM 训练 / 推理框架，
   `norm.py`（`RMSNorm`）、`rope.py`（`precompute_freqs_cis` / `apply_rotary_pos_emb` / `repeat_kv`）、
   `attention.py`（`Attention`）、`mlp.py`（`FeedForward` / `MOEFeedForward`）、
   `block.py`（`MiniMindBlock`）、`model.py`（`MiniMindModel` Transformer 主干）。
-- `models/`：把 `core` 组件**拼装**成成品模型——
-  `MiniMindForCausalLM`（文本）、`MiniMindVLM`（视觉）、`MiniMindOmni`（语音/全模态）。
+- `models/`：把 `core` 组件**拼装**成成品模型，按模态能力分为三个子包（每个含 `config.py` 配置 + `model.py` 建模）：
+  - `models/lm/`：纯文本——`MiniMindConfig` + `MiniMindForCausalLM`
+  - `models/vlm/`：文本 + 视觉——`VLMConfig` + `MiniMindVLM`
+  - `models/vam/`：文本 + 语音/全模态——`OmniConfig` + `MiniMindOmni`（含 `TalkerModule`）
 - `encoders/`：外部模态编码器，按模态分目录——`vision/`（SigLIP）、`audio/`（SenseVoice）。
 - `projectors/`：把 encoder 输出**桥接**到 LLM 隐藏维度的拼接层（`MMVisionProjector`、`MMAudioProjector`）。
 - `serve/`：实时语音会话工程层（`SileroVAD`、`RealtimeSession`）。
@@ -31,10 +33,16 @@ src/omni/
 │   ├── mlp.py          #   FeedForward / MOEFeedForward
 │   ├── block.py        #   MiniMindBlock
 │   └── model.py        #   MiniMindModel（Transformer 主干）
-├── models/             # 模型拼装
-│   ├── minimind.py     # MiniMindConfig + MiniMindForCausalLM
-│   ├── vlm.py          # VLMConfig + MiniMindVLM（视觉多模态）
-│   ├── omni.py         # OmniConfig + MiniMindOmni + TalkerModule（语音/全模态）
+├── models/             # 模型拼装（按模态能力分子包）
+│   ├── lm/             #   纯文本
+│   │   ├── config.py   #     MiniMindConfig
+│   │   └── model.py    #     MiniMindForCausalLM
+│   ├── vlm/            #   文本 + 视觉
+│   │   ├── config.py   #     VLMConfig
+│   │   └── model.py    #     MiniMindVLM
+│   ├── vam/            #   文本 + 语音/全模态
+│   │   ├── config.py   #     OmniConfig
+│   │   └── model.py    #     MiniMindOmni + TalkerModule
 │   └── lora.py         # LoRA 注入 / 保存 / 合并
 ├── encoders/           # 多模态编码器（按模态分目录）
 │   ├── vision/        #   SiglipVisionEncoder

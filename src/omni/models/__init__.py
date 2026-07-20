@@ -1,3 +1,16 @@
+from omni.models.lm.config import MiniMindConfig
+from omni.models.lm.model import MiniMindForCausalLM
+from omni.models.vlm.config import VLMConfig
+from omni.models.vlm.model import MiniMindVLM
+from omni.models.vam.config import OmniConfig
+from omni.models.vam.model import MiniMindOmni, TalkerModule
+from omni.models.lora import (
+    LoRA,
+    apply_lora,
+    load_lora,
+    save_lora,
+    merge_lora,
+)
 from omni.core import (
     RMSNorm,
     Attention,
@@ -8,46 +21,26 @@ from omni.core import (
     precompute_freqs_cis,
     apply_rotary_pos_emb,
 )
-from omni.models.minimind import (
-    MiniMindConfig,
-    MiniMindForCausalLM,
-)
-from omni.models.vlm import (
-    VLMConfig,
-    MiniMindVLM,
-)
-from omni.models.omni import (
-    OmniConfig,
-    MiniMindOmni,
-    TalkerModule,
-)
-from omni.models.lora import (
-    LoRA,
-    apply_lora,
-    load_lora,
-    save_lora,
-    merge_lora,
-)
 
 __all__ = [
     "MiniMindConfig",
-    "MiniMindModel",
     "MiniMindForCausalLM",
     "VLMConfig",
     "MiniMindVLM",
     "OmniConfig",
     "MiniMindOmni",
     "TalkerModule",
-    "RMSNorm",
-    "Attention",
-    "FeedForward",
-    "MOEFeedForward",
-    "MiniMindBlock",
-    "precompute_freqs_cis",
-    "apply_rotary_pos_emb",
     "LoRA",
     "apply_lora",
     "load_lora",
     "save_lora",
     "merge_lora",
+    "RMSNorm",
+    "Attention",
+    "FeedForward",
+    "MOEFeedForward",
+    "MiniMindBlock",
+    "MiniMindModel",
+    "precompute_freqs_cis",
+    "apply_rotary_pos_emb",
 ]
