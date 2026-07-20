@@ -18,7 +18,7 @@ from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from models import LMConfig, LMForCausalLM
 from dataset import RLAIFDataset
-from utils.training import Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, SkipBatchSampler, init_model, LMForRewardModel
+from utils.training import init_logger, Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, SkipBatchSampler, init_model, LMForRewardModel
 from utils.training import apply_config  # noqa: F401
 from trainers.lm.rollout_engine import create_rollout_engine
 
@@ -344,6 +344,7 @@ if __name__ == "__main__":
     
     # ========== 2. 配置目录、模型参数、检查ckp ==========
     os.makedirs(args.save_dir, exist_ok=True)
+    init_logger(args.save_dir, getattr(args, "save_weight", "train"))
     lm_config = LMConfig(**vars(args))
     ckp_data = lm_checkpoint(lm_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume==1 else None
     

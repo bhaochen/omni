@@ -57,9 +57,26 @@ def is_main_process():
     return not dist.is_initialized() or dist.get_rank() == 0
 
 
+_log_file = None
+
+
+def init_logger(save_dir='../checkpoint', name='train'):
+    global _log_file
+    if not is_main_process():
+        return
+    os.makedirs(save_dir, exist_ok=True)
+    log_path = os.path.join(save_dir, f'{name}.log')
+    _log_file = open(log_path, 'a', encoding='utf-8')
+    Logger(f'日志写入: {os.path.abspath(log_path)}')
+
+
 def Logger(content):
-    if is_main_process():
-        print(content)
+    if not is_main_process():
+        return
+    print(content)
+    if _log_file is not None:
+        _log_file.write(str(content) + '\n')
+        _log_file.flush()
 
 
 def get_lr(current_step, total_steps, lr):

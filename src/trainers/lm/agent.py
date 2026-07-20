@@ -21,7 +21,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from transformers import AutoTokenizer
 from models import LMConfig, LMForCausalLM
 from dataset import AgentRLDataset
-from utils.training import Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, SkipBatchSampler, init_model, LMForRewardModel
+from utils.training import init_logger, Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, SkipBatchSampler, init_model, LMForRewardModel
 from utils.training import apply_config  # noqa: F401
 from trainers.lm.rollout_engine import create_rollout_engine, compute_per_token_logps
 
@@ -416,6 +416,7 @@ if __name__ == "__main__":
     setup_seed(42 + (dist.get_rank() if dist.is_initialized() else 0))
 
     os.makedirs(args.save_dir, exist_ok=True)
+    init_logger(args.save_dir, getattr(args, "save_weight", "train"))
     lm_config = LMConfig(hidden_size=args.hidden_size, num_hidden_layers=args.num_hidden_layers,
                                max_seq_len=args.max_seq_len + args.max_gen_len, use_moe=bool(args.use_moe))
     ckp_data = lm_checkpoint(lm_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume == 1 else None
