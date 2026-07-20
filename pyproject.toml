@@ -1,10 +1,35 @@
 [project]
 name = "omni"
 version = "0.1.0"
-description = "Add your description here"
+description = "MiniMind LLM (and future multimodal) training & inference framework, structured as an installable package."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "torch>=2.6.0",
+    "transformers>=4.57.6",
+    "datasets>=3.6.0",
+    "tokenizers>=0.20.0",
+    "tiktoken>=0.10.0",
+    "jinja2>=3.1.2",
+    "numpy>=1.26.4",
+    "safetensors>=0.5.0",
+    "accelerate>=1.0.0",
+    "sentencepiece>=0.2.0",
+    "jieba>=0.42.1",
+    "pydantic>=2.11.5",
+    "rich>=13.7.1",
+    "regex",
+]
+
+[project.optional-dependencies]
+rl = ["swanlab>=0.7.11", "wandb>=0.18.3"]
+serve = ["fastapi>=3.0.3", "uvicorn", "pydantic>=2.11.5", "openai>=1.59.6", "flask>=3.0.3", "flask-cors>=4.0.0"]
+demo = ["streamlit>=1.50.0"]
+all = ["swanlab>=0.7.11", "wandb>=0.18.3", "fastapi>=3.0.3", "uvicorn", "openai>=1.59.6", "flask>=3.0.3", "flask-cors>=4.0.0", "streamlit>=1.50.0", "sglang"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
