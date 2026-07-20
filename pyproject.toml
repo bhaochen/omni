@@ -27,9 +27,9 @@ dependencies = [
 
 [project.optional-dependencies]
 rl = ["swanlab>=0.7.11", "wandb>=0.18.3"]
-serve = ["fastapi>=3.0.3", "uvicorn", "pydantic>=2.11.5", "openai>=1.59.6", "flask>=3.0.3", "flask-cors>=4.0.0"]
+serve = ["fastapi>=0.115.0", "uvicorn", "pydantic>=2.11.5", "openai>=1.59.6", "flask>=3.0.3", "flask-cors>=4.0.0"]
 demo = ["streamlit>=1.50.0"]
-all = ["swanlab>=0.7.11", "wandb>=0.18.3", "fastapi>=3.0.3", "uvicorn", "openai>=1.59.6", "flask>=3.0.3", "flask-cors>=4.0.0", "streamlit>=1.50.0", "sglang"]
+all = ["swanlab>=0.7.11", "wandb>=0.18.3", "fastapi>=0.115.0", "uvicorn", "openai>=1.59.6", "flask>=3.0.3", "flask-cors>=4.0.0", "streamlit>=1.50.0", "sglang"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
