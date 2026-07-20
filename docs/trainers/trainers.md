@@ -1,4 +1,4 @@
-# training/trainers.md · 训练脚本
+# trainers/trainers.md · 训练脚本
 
 `trainers/` 按模态分子包，每个脚本暴露 `main(default_config=None)`（可由 `python -m trainers.<mod>` 或 `runs/*.sh` 调用）。
 

@@ -1,4 +1,4 @@
-# training/config-and-cli.md · 配置与命令行
+# utils/config-and-cli.md · 配置与命令行
 
 ## 机制
 
