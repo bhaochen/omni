@@ -1,5 +1,5 @@
 from omni.models.lm.config import MiniMindConfig
-from omni.models.lm.model import MiniMindForCausalLM
+from omni.models.lm.model import MiniMindForCausalLM, MiniMindModel
 from omni.models.vlm.config import VLMConfig
 from omni.models.vlm.model import MiniMindVLM
 from omni.models.vam.config import OmniConfig
@@ -17,7 +17,6 @@ from omni.core import (
     FeedForward,
     MOEFeedForward,
     MiniMindBlock,
-    MiniMindModel,
     precompute_freqs_cis,
     apply_rotary_pos_emb,
 )

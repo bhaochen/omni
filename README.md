@@ -10,10 +10,10 @@ Omni 是一个以 **多模态 (omni)** 为目标的 LLM 训练 / 推理框架，
 
 ## 设计分层
 
-- `core/`：可复用模型**底层组件**，按层级细分为独立模块——
+- `core/`：可复用模型**纯底层组件**，按层级细分为独立模块——
   `norm.py`（`RMSNorm`）、`rope.py`（`precompute_freqs_cis` / `apply_rotary_pos_emb` / `repeat_kv`）、
   `attention.py`（`Attention`）、`mlp.py`（`FeedForward` / `MOEFeedForward`）、
-  `block.py`（`MiniMindBlock`）、`model.py`（`MiniMindModel` Transformer 主干）。
+  `block.py`（`MiniMindBlock`）。（Transformer 主干 `MiniMindModel` 已归入 `models/lm/model.py`）
 - `models/`：把 `core` 组件**拼装**成成品模型，按模态能力分为三个子包（每个含 `config.py` 配置 + `model.py` 建模）：
   - `models/lm/`：纯文本——`MiniMindConfig` + `MiniMindForCausalLM`
   - `models/vlm/`：文本 + 视觉——`VLMConfig` + `MiniMindVLM`
@@ -31,8 +31,7 @@ src/omni/
 │   ├── rope.py         #   precompute_freqs_cis / apply_rotary_pos_emb / repeat_kv
 │   ├── attention.py    #   Attention
 │   ├── mlp.py          #   FeedForward / MOEFeedForward
-│   ├── block.py        #   MiniMindBlock
-│   └── model.py        #   MiniMindModel（Transformer 主干）
+│   └── block.py        #   MiniMindBlock
 ├── models/             # 模型拼装（按模态能力分子包）
 │   ├── lm/             #   纯文本
 │   │   ├── config.py   #     MiniMindConfig
