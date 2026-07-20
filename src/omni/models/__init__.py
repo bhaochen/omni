@@ -4,7 +4,7 @@ from omni.models.vlm.config import VLMConfig
 from omni.models.vlm.model import MiniMindVLM
 from omni.models.vam.config import OmniConfig
 from omni.models.vam.model import MiniMindOmni, TalkerModule
-from omni.models.lora import (
+from omni.models.lm.lora import (
     LoRA,
     apply_lora,
     load_lora,

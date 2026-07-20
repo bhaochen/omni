@@ -6,7 +6,7 @@ import transformers
 import warnings
 from transformers import AutoTokenizer, AutoModelForCausalLM, Qwen3Config, Qwen3ForCausalLM, Qwen3MoeConfig, Qwen3MoeForCausalLM
 from omni.models import MiniMindConfig, MiniMindForCausalLM
-from omni.models.lora import apply_lora, merge_lora
+from omni.models.lm.lora import apply_lora, merge_lora
 
 warnings.filterwarnings('ignore', category=UserWarning)
 

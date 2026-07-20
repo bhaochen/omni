@@ -35,14 +35,14 @@ src/omni/
 ├── models/             # 模型拼装（按模态能力分子包）
 │   ├── lm/             #   纯文本
 │   │   ├── config.py   #     MiniMindConfig
-│   │   └── model.py    #     MiniMindForCausalLM
+│   │   ├── model.py    #     MiniMindForCausalLM + MiniMindModel 主干
+│   │   └── lora.py     #     LoRA 注入 / 保存 / 合并（作用于 MiniMind 系主干）
 │   ├── vlm/            #   文本 + 视觉
 │   │   ├── config.py   #     VLMConfig
 │   │   └── model.py    #     MiniMindVLM
-│   ├── vam/            #   文本 + 语音/全模态
-│   │   ├── config.py   #     OmniConfig
-│   │   └── model.py    #     MiniMindOmni + TalkerModule
-│   └── lora.py         # LoRA 注入 / 保存 / 合并
+│   └── vam/            #   文本 + 语音/全模态
+│       ├── config.py   #     OmniConfig
+│       └── model.py    #     MiniMindOmni + TalkerModule
 ├── encoders/           # 多模态编码器（按模态分目录）
 │   ├── vision/        #   SiglipVisionEncoder
 │   └── audio/         #   SenseVoiceAudioEncoder

@@ -13,7 +13,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from omni.models import MiniMindConfig
 from omni.datasets.lm_dataset import SFTDataset
-from omni.models.lora import save_lora, apply_lora
+from omni.models.lm.lora import save_lora, apply_lora
 from omni.utils.training import get_lr, Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, init_model, SkipBatchSampler
 
 warnings.filterwarnings('ignore')
