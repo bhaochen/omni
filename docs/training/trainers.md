@@ -15,7 +15,7 @@
 | `grpo.py` | GRPO | 分组相对策略优化 |
 | `agent.py` | Agent RL | 工具调用强化学习 |
 | `rollout_engine.py` | — | torch / sglang 推理引擎（被 ppo/grpo/agent 复用） |
-| `train_tokenizer.py` | — | tokenizer 训练（学习用） |
+| `train_tokenizer.py` | — | tokenizer 训练（学习用），结果保存到 `checkpoint/tokenizer/` |
 
 ## 视觉（vlm/）
 
@@ -47,4 +47,4 @@ for epoch in range(epochs):
 - **`SkipBatchSampler`**：分布式下跳过已训 step，配合 `from_resume` 实现精确续训。
 - **`aux_loss`**：MoE 路由均衡损失，只在 `use_moe` 时非 0，需显式加到总损失。
 - **RL trainer 复用 `rollout_engine`**：生成样本与训练解耦，可换 torch / sglang 后端。
-- 保存分两份：`save_dir`（最终权重 `.pth`）+ `checkpoint/`（optimizer/scheduler 状态用于续训）。
+- 保存分两份：`save_dir`（最终权重 `.pth`）+ `checkpoint/`（optimizer/scheduler 状态用于续训）。`train_tokenizer.py` 额外把训练出的 tokenizer 写到 `checkpoint/tokenizer/`。

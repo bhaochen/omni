@@ -72,7 +72,8 @@ configs/
 runs/                # 根目录可直接运行的训练启动脚本（默认加载对应 configs/model/*.yaml）
 ├── lm.sh            # bash runs/lm.sh  -> configs/model/lm.yaml
 ├── vlm.sh           # bash runs/vlm.sh -> configs/model/vlm.yaml
-└── vam.sh           # bash runs/vam.sh -> configs/model/vam.yaml
+├── vam.sh           # bash runs/vam.sh -> configs/model/vam.yaml
+└── train_tokenizer.sh  # bash runs/train_tokenizer.sh -> 训练 tokenizer，保存到 checkpoint/tokenizer/
 scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_llm.py      # 命令行推理与对话
 ├── eval_vlm.py      # 视觉多模态推理

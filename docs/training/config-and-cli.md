@@ -56,6 +56,24 @@ trainer 用 `LMConfig(**vars(args))`（或 `VLMConfig` / `VAMConfig`）构造模
 bash runs/lm.sh                                   # 默认 configs/model/lm.yaml
 bash runs/vlm.sh --config configs/model/vlm_moe.yaml
 bash runs/vam.sh --epochs 10                       # 覆盖单字段
+bash runs/train_tokenizer.sh                      # 训练 tokenizer（学习用），保存到 checkpoint/tokenizer/
+```
+
+## Tokenizer 训练
+
+`trainers/lm/train_tokenizer.py` 仅供学习参考（MiniMind 已自带 tokenizer，重复训练会导致词表不统一）。
+训练得到的 tokenizer 直接保存到 **`checkpoint/tokenizer/`**（与模型权重同目录），包含：
+
+- `tokenizer.json` / `vocab.json` / `merges.txt`：BPE 词表
+- `tokenizer_config.json`：special token、chat template 等配置
+
+常用参数：
+
+```bash
+bash runs/train_tokenizer.sh --data_path dataset/sft_t2t_mini.jsonl \
+                             --vocab_size 6400 \
+                             --checkpoint_dir ../checkpoint \
+                             --no_eval
 ```
 
 ## 要点（面试）
