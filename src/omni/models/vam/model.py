@@ -10,7 +10,7 @@ from torch.nn import functional as F
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 from transformers import SiglipVisionModel, SiglipImageProcessor, logging as hf_logging
 
-from omni.core import RMSNorm, precompute_freqs_cis, MiniMindBlock, MOEFeedForward
+from omni.core import RMSNorm, precompute_freqs_cis, Block, MOEFeedForward
 from omni.models.lm.config import MiniMindConfig
 from omni.models.lm.model import MiniMindForCausalLM
 from omni.models.vam.config import OmniConfig
@@ -53,7 +53,7 @@ class TalkerModule(nn.Module):
     def __init__(self, config: OmniConfig):
         super().__init__()
         self.talker_config = MiniMindConfig(hidden_size=config.talker_hidden_size, use_moe=config.use_moe)
-        self.layers = nn.ModuleList([MiniMindBlock(l, self.talker_config) for l in range(config.num_talker_hidden_layers)])
+        self.layers = nn.ModuleList([Block(l, self.talker_config) for l in range(config.num_talker_hidden_layers)])
         self.norm = RMSNorm(config.talker_hidden_size, eps=config.rms_norm_eps)
         self.lm_head = TalkerHead(config.talker_hidden_size, config.audio_vocab_size)
         self.embed_tokens = TalkerEmbedding(config.audio_vocab_size, config.talker_hidden_size)

@@ -3,7 +3,7 @@ from torch import optim, nn
 
 # LoRA for MiniMind-series backbones.
 # Applies to every nn.Linear whose in_features == out_features, i.e. the
-# q/k/v/o_proj and gate/up/down_proj inside MiniMindBlock's Attention/MLP.
+# q/k/v/o_proj and gate/up/down_proj inside Block's Attention/MLP.
 # Because VLM/Omni reuse the same MiniMind Attention/MLP for their LLM
 # (thinker)主干, apply_lora also works on MiniMindVLM / MiniMindOmni, but only
 # touches the shared LLM layers -- vision/audio projectors and the speech

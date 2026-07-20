@@ -16,7 +16,7 @@ from omni.core import (
     Attention,
     FeedForward,
     MOEFeedForward,
-    MiniMindBlock,
+    Block,
     precompute_freqs_cis,
     apply_rotary_pos_emb,
 )
@@ -38,8 +38,7 @@ __all__ = [
     "Attention",
     "FeedForward",
     "MOEFeedForward",
-    "MiniMindBlock",
-    "MiniMindModel",
+    "Block",
     "precompute_freqs_cis",
     "apply_rotary_pos_emb",
 ]

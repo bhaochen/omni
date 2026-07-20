@@ -5,7 +5,7 @@ from omni.core.attention import Attention
 from omni.core.mlp import FeedForward, MOEFeedForward
 
 
-class MiniMindBlock(nn.Module):
+class Block(nn.Module):
     def __init__(self, layer_id: int, config: "MiniMindConfig"):
         super().__init__()
         self.self_attn = Attention(config)
