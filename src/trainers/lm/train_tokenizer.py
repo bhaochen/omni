@@ -2,10 +2,11 @@
 # Note: It is not recommended to re-train the tokenizer. MiniMind already includes one. This script is for learning and reference only. Training models with different tokenizers will lead to inconsistent outputs and reduce model reusability in the community.
 import os
 import json
+import argparse
 from tokenizers import decoders, models, pre_tokenizers, trainers, Tokenizer
 
 DATA_PATH = '../dataset/sft_t2t_mini.jsonl'
-TOKENIZER_DIR = '../model_learn_tokenizer/'
+CHECKPOINT_DIR = '../checkpoint/'
 VOCAB_SIZE = 6400
 SPECIAL_TOKENS_NUM = 36
 
@@ -21,25 +22,30 @@ def get_texts(data_path):
             except json.JSONDecodeError:
                 continue
 
-def train_tokenizer(data_path, tokenizer_dir, vocab_size, special_tokens_num=SPECIAL_TOKENS_NUM):
-    tokenizer = Tokenizer(models.BPE())
-    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
-    
+def build_special_tokens(special_tokens_num=SPECIAL_TOKENS_NUM):
     special_tokens_list = [
-        "<|endoftext|>", "<|im_start|>", "<|im_end|>", 
-        "<|object_ref_start|>", "<|object_ref_end|>", "<|box_start|>", "<|box_end|>", "<|quad_start|>", "<|quad_end|>", 
-        "<|vision_start|>", "<|vision_end|>", "<|vision_pad|>", "<|image_pad|>", "<|video_pad|>", 
+        "<|endoftext|>", "<|im_start|>", "<|im_end|>",
+        "<|object_ref_start|>", "<|object_ref_end|>", "<|box_start|>", "<|box_end|>", "<|quad_start|>", "<|quad_end|>",
+        "<|vision_start|>", "<|vision_end|>", "<|vision_pad|>", "<|image_pad|>", "<|video_pad|>",
         "<|audio_start|>", "<|audio_end|>", "<|audio_pad|>", "<tts_pad>", "<tts_text_bos>", "<tts_text_eod>", "<tts_text_bos_single>"
     ]
-    
+
     additional_tokens_list = [
         "<tool_call>", "</tool_call>",
         "<tool_response>", "</tool_response>",
         "<think>", "</think>"
     ]
     num_buffer = special_tokens_num - len(special_tokens_list + additional_tokens_list)
-    buffer_tokens = [f"<|buffer{i}|>" for i in range(1, num_buffer + 1)] # 预留一定数量的token位置
+    buffer_tokens = [f"<|buffer{i}|>" for i in range(1, num_buffer + 1)]  # 预留一定数量的token位置
     all_special_tokens = special_tokens_list + additional_tokens_list + buffer_tokens
+    return special_tokens_list, all_special_tokens
+
+
+def train_tokenizer(data_path, vocab_size, special_tokens_num=SPECIAL_TOKENS_NUM, checkpoint_dir=None):
+    tokenizer = Tokenizer(models.BPE())
+    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+
+    special_tokens_list, all_special_tokens = build_special_tokens(special_tokens_num)
     trainer = trainers.BpeTrainer(
         vocab_size=vocab_size,
         show_progress=True,
@@ -51,6 +57,12 @@ def train_tokenizer(data_path, tokenizer_dir, vocab_size, special_tokens_num=SPE
     tokenizer.decoder = decoders.ByteLevel()
     tokenizer.add_special_tokens(special_tokens_list)
 
+    if checkpoint_dir:
+        ckpt_tokenizer_dir = os.path.join(checkpoint_dir, "tokenizer")
+        save_tokenizer(tokenizer, ckpt_tokenizer_dir, special_tokens_list, all_special_tokens)
+
+
+def save_tokenizer(tokenizer, tokenizer_dir, special_tokens_list, all_special_tokens):
     os.makedirs(tokenizer_dir, exist_ok=True)
     tokenizer.save(os.path.join(tokenizer_dir, "tokenizer.json"))
     tokenizer.model.save(tokenizer_dir)
@@ -103,7 +115,7 @@ def train_tokenizer(data_path, tokenizer_dir, vocab_size, special_tokens_num=SPE
 
     with open(os.path.join(tokenizer_dir, "tokenizer_config.json"), "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
-    print("Tokenizer training completed.")
+    print(f"Tokenizer saved to {tokenizer_dir}.")
 
 def eval_tokenizer(tokenizer_dir):
     from transformers import AutoTokenizer
@@ -164,5 +176,20 @@ def eval_tokenizer(tokenizer_dir):
             token_cache = []
 
 if __name__ == '__main__':
-    train_tokenizer(DATA_PATH, TOKENIZER_DIR, VOCAB_SIZE)
-    eval_tokenizer(TOKENIZER_DIR)
+    parser = argparse.ArgumentParser(description="MiniMind Tokenizer Training (学习用)")
+    parser.add_argument("--data_path", type=str, default=DATA_PATH, help="训练语料路径 (.jsonl)")
+    parser.add_argument("--checkpoint_dir", type=str, default=CHECKPOINT_DIR, help="tokenizer 保存到该 checkpoint 目录下的 tokenizer/ 子目录")
+    parser.add_argument("--vocab_size", type=int, default=VOCAB_SIZE, help="词表大小")
+    parser.add_argument("--special_tokens_num", type=int, default=SPECIAL_TOKENS_NUM, help="特殊 token 预留数量")
+    parser.add_argument("--no_eval", action="store_true", help="训练后跳过评估")
+    args = parser.parse_args()
+
+    ckpt_tokenizer_dir = os.path.join(args.checkpoint_dir, "tokenizer")
+    train_tokenizer(
+        args.data_path,
+        args.vocab_size,
+        special_tokens_num=args.special_tokens_num,
+        checkpoint_dir=args.checkpoint_dir,
+    )
+    if not args.no_eval:
+        eval_tokenizer(ckpt_tokenizer_dir)
