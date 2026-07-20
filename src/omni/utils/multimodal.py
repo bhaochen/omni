@@ -5,7 +5,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
 from omni.utils.training import Logger, is_main_process
-from omni.models import MiniMindOmni, MiniMindVLM
+from omni.models import VAM, VLM
 
 
 def get_vlm_model_params(model, config, ignore_patterns=('vision_encoder',)):
@@ -26,10 +26,10 @@ def get_vlm_model_params(model, config, ignore_patterns=('vision_encoder',)):
         Logger(f'Model Params: {total:.2f}M')
 
 
-def init_vlm_model(vlm_config, from_weight='pretrain_vlm', tokenizer_path='../model', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../out', device='cuda', freeze_llm=0):
+def init_vlm_model(vlm_config, from_weight='pretrain_vlm', tokenizer_path='../model', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_llm=0):
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-    model = MiniMindVLM(vlm_config, vision_model_path=vision_model_path)
+    model = VLM(vlm_config, vision_model_path=vision_model_path)
 
     if from_weight != 'none':
         moe_suffix = '_moe' if vlm_config.use_moe else ''
@@ -136,10 +136,10 @@ def log_model_params(model, ignore_patterns=('audio_encoder', 'vision_encoder'))
     else: Logger(f'Model Params: {total:.2f}M')
 
 
-def init_omni_model(omni_config, from_weight='full_sft', tokenizer_path='../model', audio_encoder_path='../model/SenseVoiceSmall', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../out', device='cuda', freeze_backbone='none', from_resume=0):
+def init_omni_model(omni_config, from_weight='full_sft', tokenizer_path='../model', audio_encoder_path='../model/SenseVoiceSmall', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_backbone='none', from_resume=0):
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-    model = MiniMindOmni(omni_config, audio_encoder_path=audio_encoder_path, vision_model_path=vision_model_path)
+    model = VAM(omni_config, audio_encoder_path=audio_encoder_path, vision_model_path=vision_model_path)
 
     if from_weight != 'none':
         moe_suffix = '_moe' if omni_config.use_moe else ''

@@ -6,7 +6,7 @@ from omni.core.mlp import FeedForward, MOEFeedForward
 
 
 class Block(nn.Module):
-    def __init__(self, layer_id: int, config: "MiniMindConfig"):
+    def __init__(self, layer_id: int, config: "LMConfig"):
         super().__init__()
         self.self_attn = Attention(config)
         self.input_layernorm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)

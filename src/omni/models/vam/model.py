@@ -11,9 +11,9 @@ from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 from transformers import SiglipVisionModel, SiglipImageProcessor, logging as hf_logging
 
 from omni.core import RMSNorm, precompute_freqs_cis, Block, MOEFeedForward
-from omni.models.lm.config import MiniMindConfig
-from omni.models.lm.model import MiniMindForCausalLM
-from omni.models.vam.config import OmniConfig
+from omni.models.lm.config import LMConfig
+from omni.models.lm.model import LMForCausalLM
+from omni.models.vam.config import VAMConfig
 from omni.encoders.audio import SenseVoiceAudioEncoder, SenseVoiceAudioProcessor
 from omni.encoders.vision import SiglipVisionEncoder
 from omni.projectors import MMVisionProjector, MMAudioProjector
@@ -50,9 +50,9 @@ class TalkerEmbedding(nn.Module):
 
 
 class TalkerModule(nn.Module):
-    def __init__(self, config: OmniConfig):
+    def __init__(self, config: VAMConfig):
         super().__init__()
-        self.talker_config = MiniMindConfig(hidden_size=config.talker_hidden_size, use_moe=config.use_moe)
+        self.talker_config = LMConfig(hidden_size=config.talker_hidden_size, use_moe=config.use_moe)
         self.layers = nn.ModuleList([Block(l, self.talker_config) for l in range(config.num_talker_hidden_layers)])
         self.norm = RMSNorm(config.talker_hidden_size, eps=config.rms_norm_eps)
         self.lm_head = TalkerHead(config.talker_hidden_size, config.audio_vocab_size)
@@ -79,11 +79,11 @@ class TalkerModule(nn.Module):
         self.register_buffer("freqs_sin", freqs_sin, persistent=False)
 
 
-class MiniMindOmni(MiniMindForCausalLM):
-    config_class = OmniConfig
+class VAM(LMForCausalLM):
+    config_class = VAMConfig
 
-    def __init__(self, config: OmniConfig = None, audio_encoder_path: str = None, vision_model_path: str = None):
-        config = config or OmniConfig()
+    def __init__(self, config: VAMConfig = None, audio_encoder_path: str = None, vision_model_path: str = None):
+        config = config or VAMConfig()
         super().__init__(config)
         object.__setattr__(self, 'thinker', self.model)
         object.__setattr__(self.model, 'lm_head', self.lm_head)
@@ -101,7 +101,7 @@ class MiniMindOmni(MiniMindForCausalLM):
     @staticmethod
     def load_sensevoice(path):
         if not os.path.exists(path):
-            warnings.warn(f"[MiniMindOmni] SenseVoice path not found: {path}")
+            warnings.warn(f"[VAM] SenseVoice path not found: {path}")
             return None, None
         logging.getLogger().setLevel(logging.ERROR)
         hf_logging.set_verbosity_error()
@@ -116,7 +116,7 @@ class MiniMindOmni(MiniMindForCausalLM):
     @staticmethod
     def load_vision(path):
         if path is None or not os.path.exists(path):
-            warnings.warn(f"[MiniMindOmni] Vision model path not found: {path}. vision_encoder will be None!")
+            warnings.warn(f"[VAM] Vision model path not found: {path}. vision_encoder will be None!")
             return None, None
         hf_logging.set_verbosity_error()
         try:

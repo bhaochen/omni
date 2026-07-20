@@ -1,12 +1,14 @@
+import os
 import torch
 import torch.nn.functional as F
 import warnings
 from typing import Optional, Tuple, List, Union
 from torch import nn
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
+from transformers import SiglipVisionModel, SiglipImageProcessor, logging as hf_logging
 
 from omni.core import precompute_freqs_cis, MOEFeedForward
-from omni.models.lm.model import MiniMindForCausalLM
+from omni.models.lm.model import LMForCausalLM
 from omni.models.vlm.config import VLMConfig
 from omni.encoders.vision import SiglipVisionEncoder
 from omni.projectors import MMVisionProjector
@@ -14,7 +16,7 @@ from omni.projectors import MMVisionProjector
 warnings.filterwarnings('ignore')
 
 
-class MiniMindVLM(MiniMindForCausalLM):
+class VLM(LMForCausalLM):
     config_class = VLMConfig
 
     def __init__(self, config: VLMConfig = None, vision_model_path: Optional[str] = None):
@@ -24,6 +26,26 @@ class MiniMindVLM(MiniMindForCausalLM):
         self.vision_proj = MMVisionProjector(
             self.config.image_hidden_size, self.config.hidden_size, target_tokens=self.config.image_token_len
         )
+
+    @staticmethod
+    def get_vision_model(model_path: str):
+        hf_logging.set_verbosity_error()
+        if not os.path.exists(model_path):
+            return None, None
+        try:
+            model = SiglipVisionModel.from_pretrained(model_path)
+        except (RuntimeError, ValueError):
+            return None, None
+        processor = SiglipImageProcessor.from_pretrained(model_path)
+        for param in model.parameters():
+            param.requires_grad = False
+        return model.eval(), processor
+
+    @staticmethod
+    def image2tensor(image, processor):
+        if image.mode in ['RGBA', 'LA']:
+            image = image.convert('RGB')
+        return processor(images=image, return_tensors="pt")
 
     @staticmethod
     def get_image_embeddings(image_inputs, vision_model):
@@ -77,20 +99,20 @@ class MiniMindVLM(MiniMindForCausalLM):
                 if sample_val.ndim == 5:
                     bs, num = sample_val.shape[:2]
                     vision_tensors = self.vision_proj(
-                        MiniMindVLM.get_image_embeddings(
+                        VLM.get_image_embeddings(
                             {k: v.flatten(0, 1) for k, v in pixel_values.items()}, self.vision_encoder
                         )
                     ).view(bs, num, self.config.image_token_len, -1)
                 else:
                     vision_tensors = self.vision_proj(
-                        MiniMindVLM.get_image_embeddings(pixel_values, self.vision_encoder)
+                        VLM.get_image_embeddings(pixel_values, self.vision_encoder)
                     )
             else:
                 if len(pixel_values.shape) == 6:
                     pixel_values = pixel_values.squeeze(2)
                 bs, num, c, im_h, im_w = pixel_values.shape
                 vision_tensors = torch.stack(
-                    [self.vision_proj(MiniMindVLM.get_image_embeddings(pixel_values[:, i, :, :, :], self.vision_encoder))
+                    [self.vision_proj(VLM.get_image_embeddings(pixel_values[:, i, :, :, :], self.vision_encoder))
                      for i in range(num)], dim=1
                 )
             hidden_states = self.count_vision_proj(

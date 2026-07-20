@@ -8,7 +8,7 @@ from omni.core.rope import apply_rotary_pos_emb, repeat_kv
 
 
 class Attention(nn.Module):
-    def __init__(self, config: "MiniMindConfig"):
+    def __init__(self, config: "LMConfig"):
         super().__init__()
         self.num_key_value_heads = config.num_attention_heads if config.num_key_value_heads is None else config.num_key_value_heads
         self.n_local_heads = config.num_attention_heads

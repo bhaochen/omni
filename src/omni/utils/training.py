@@ -3,12 +3,39 @@ import sys
 import random
 import math
 import numpy as np
+import yaml
 import torch
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import Sampler
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
-from omni.models import MiniMindForCausalLM
+from omni.models import LMForCausalLM
+
+
+def _load_yaml_config(config_path):
+    with open(config_path, 'r', encoding='utf-8') as f:
+        raw = yaml.safe_load(f) or {}
+    defaults = {}
+    for section in ('model', 'train', 'paths'):
+        for key, value in (raw.get(section) or {}).items():
+            defaults[key] = value
+    return defaults
+
+
+def apply_config(parser, default_config=None):
+    """让 YAML 配置成为 argparse 默认值，CLI 显式传参仍可覆盖。
+
+    用法：parser 需已定义 --config 参数。本函数会先 parse_known_args 读取 --config；
+    若未传 --config 且给定了 default_config，则回退到该默认路径。命中 YAML 后扁平化
+    （model/train/paths 三个 section）作为 argparse 默认值注入，再做最终 parse。
+    返回最终的 args。
+    """
+    pre, _ = parser.parse_known_args()
+    config_path = getattr(pre, 'config', None) or default_config
+    if config_path and os.path.exists(config_path):
+        defaults = _load_yaml_config(config_path)
+        parser.set_defaults(**defaults)
+    return parser.parse_args()
 
 
 def get_model_params(model, config):
@@ -114,9 +141,9 @@ def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoc
         return None
 
 
-def init_model(lm_config, from_weight='pretrain', tokenizer_path='../model', save_dir='../out', device='cuda'):
+def init_model(lm_config, from_weight='pretrain', tokenizer_path='../model', save_dir='../checkpoint', device='cuda'):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-    model = MiniMindForCausalLM(lm_config)
+    model = LMForCausalLM(lm_config)
 
     if from_weight != 'none':
         moe_suffix = '_moe' if lm_config.use_moe else ''

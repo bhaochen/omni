@@ -9,6 +9,7 @@ from omni.utils.training import (
     init_model,
     SkipBatchSampler,
     LMForRewardModel,
+    apply_config,
 )
 from omni.utils.distributed import (
     init_distributed_mode as init_distributed,
@@ -46,6 +47,7 @@ __all__ = [
     "init_model",
     "SkipBatchSampler",
     "LMForRewardModel",
+    "apply_config",
     "is_distributed",
     "get_rank",
     "get_world_size",

@@ -1,4 +1,4 @@
-from omni.models.vam.config import OmniConfig
-from omni.models.vam.model import MiniMindOmni, TalkerModule
+from omni.models.vam.config import VAMConfig
+from omni.models.vam.model import VAM, TalkerModule
 
-__all__ = ["OmniConfig", "MiniMindOmni", "TalkerModule"]
+__all__ = ["VAMConfig", "VAM", "TalkerModule"]

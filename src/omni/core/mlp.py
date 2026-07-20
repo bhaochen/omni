@@ -5,7 +5,7 @@ from transformers.activations import ACT2FN
 
 
 class FeedForward(nn.Module):
-    def __init__(self, config: "MiniMindConfig", intermediate_size: int = None):
+    def __init__(self, config: "LMConfig", intermediate_size: int = None):
         super().__init__()
         intermediate_size = intermediate_size or config.intermediate_size
         self.gate_proj = nn.Linear(config.hidden_size, intermediate_size, bias=False)
@@ -18,7 +18,7 @@ class FeedForward(nn.Module):
 
 
 class MOEFeedForward(nn.Module):
-    def __init__(self, config: "MiniMindConfig"):
+    def __init__(self, config: "LMConfig"):
         super().__init__()
         self.config = config
         self.gate = nn.Linear(config.hidden_size, config.num_experts, bias=False)

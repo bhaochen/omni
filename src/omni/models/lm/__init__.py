@@ -1,4 +1,4 @@
-from omni.models.lm.config import MiniMindConfig
-from omni.models.lm.model import MiniMindForCausalLM
+from omni.models.lm.config import LMConfig
+from omni.models.lm.model import LMForCausalLM, LM
 
-__all__ = ["MiniMindConfig", "MiniMindForCausalLM"]
+__all__ = ["LMConfig", "LMForCausalLM", "LM"]

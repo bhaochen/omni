@@ -2,7 +2,7 @@ import math
 from transformers import PretrainedConfig
 
 
-class MiniMindConfig(PretrainedConfig):
+class LMConfig(PretrainedConfig):
     model_type = "minimind"
 
     def __init__(self, hidden_size=768, num_hidden_layers=8, use_moe=False, **kwargs):

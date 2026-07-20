@@ -8,8 +8,3 @@ from omni.trainers.lm.grpo import *
 from omni.trainers.lm.agent import *
 from omni.trainers.lm.rollout_engine import *
 from omni.trainers.lm.train_tokenizer import *
-
-from omni.trainers.vlm.pretrain import *
-from omni.trainers.vlm.full_sft import *
-
-from omni.trainers.vam.full_sft import *

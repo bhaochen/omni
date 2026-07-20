@@ -1,7 +1,7 @@
-from omni.models.lm.config import MiniMindConfig
+from omni.models.lm.config import LMConfig
 
 
-class OmniConfig(MiniMindConfig):
+class VAMConfig(LMConfig):
     model_type = "minimind-o"
 
     def __init__(self, **kwargs):

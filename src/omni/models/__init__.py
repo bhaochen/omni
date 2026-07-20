@@ -1,9 +1,9 @@
-from omni.models.lm.config import MiniMindConfig
-from omni.models.lm.model import MiniMindForCausalLM, MiniMindModel
+from omni.models.lm.config import LMConfig
+from omni.models.lm.model import LMForCausalLM, LM
 from omni.models.vlm.config import VLMConfig
-from omni.models.vlm.model import MiniMindVLM
-from omni.models.vam.config import OmniConfig
-from omni.models.vam.model import MiniMindOmni, TalkerModule
+from omni.models.vlm.model import VLM
+from omni.models.vam.config import VAMConfig
+from omni.models.vam.model import VAM, TalkerModule
 from omni.models.lm.lora import (
     LoRA,
     apply_lora,
@@ -22,12 +22,13 @@ from omni.core import (
 )
 
 __all__ = [
-    "MiniMindConfig",
-    "MiniMindForCausalLM",
+    "LMConfig",
+    "LMForCausalLM",
+    "LM",
     "VLMConfig",
-    "MiniMindVLM",
-    "OmniConfig",
-    "MiniMindOmni",
+    "VLM",
+    "VAMConfig",
+    "VAM",
     "TalkerModule",
     "LoRA",
     "apply_lora",

@@ -5,11 +5,11 @@ from transformers import PreTrainedModel, GenerationMixin
 from transformers.modeling_outputs import MoeCausalLMOutputWithPast
 
 from omni.core import RMSNorm, precompute_freqs_cis, Block, MOEFeedForward
-from omni.models.lm.config import MiniMindConfig
+from omni.models.lm.config import LMConfig
 
 
-class MiniMindModel(nn.Module):
-    def __init__(self, config: MiniMindConfig):
+class LM(nn.Module):
+    def __init__(self, config: LMConfig):
         super().__init__()
         self.config = config
         self.vocab_size, self.num_hidden_layers = config.vocab_size, config.num_hidden_layers
@@ -47,14 +47,14 @@ class MiniMindModel(nn.Module):
         return hidden_states, presents, aux_loss
 
 
-class MiniMindForCausalLM(PreTrainedModel, GenerationMixin):
-    config_class = MiniMindConfig
+class LMForCausalLM(PreTrainedModel, GenerationMixin):
+    config_class = LMConfig
     _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
 
-    def __init__(self, config: MiniMindConfig = None):
-        self.config = config or MiniMindConfig()
+    def __init__(self, config: LMConfig = None):
+        self.config = config or LMConfig()
         super().__init__(self.config)
-        self.model = MiniMindModel(self.config)
+        self.model = LM(self.config)
         self.lm_head = nn.Linear(self.config.hidden_size, self.config.vocab_size, bias=False)
         if self.config.tie_word_embeddings:
             self.model.embed_tokens.weight = self.lm_head.weight
