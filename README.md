@@ -69,10 +69,10 @@ src/
 configs/
 ├── model/            # lm / lm_moe / vlm / vlm_moe / vam / vam_moe 训练配置
 └── tokenizer/        # tokenizer.json / tokenizer_config.json
-trainer/              # 根目录可直接运行的训练入口（默认加载对应 configs/model/*.yaml）
-├── lm.py            # python trainer/lm.py  -> configs/model/lm.yaml
-├── vlm.py           # python trainer/vlm.py -> configs/model/vlm.yaml
-└── vam.py           # python trainer/vam.py -> configs/model/vam.yaml
+runs/                # 根目录可直接运行的训练启动脚本（默认加载对应 configs/model/*.yaml）
+├── lm.sh            # bash runs/lm.sh  -> configs/model/lm.yaml
+├── vlm.sh           # bash runs/vlm.sh -> configs/model/vlm.yaml
+└── vam.sh           # bash runs/vam.sh -> configs/model/vam.yaml
 scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_llm.py      # 命令行推理与对话
 ├── eval_vlm.py      # 视觉多模态推理
@@ -95,14 +95,13 @@ pip install -e ".[rl,serve,demo]"
 
 ### 训练（YAML 驱动）
 
-根目录 `trainer/` 提供可直接运行的入口，默认加载 `configs/model/` 下对应的 YAML，
+根目录 `runs/` 提供可直接运行的 `.sh` 启动脚本，默认加载 `configs/model/` 下对应的 YAML，
 也可通过 `--config` 指定其它配置，任意 CLI 参数都能覆盖 YAML 中的默认值：
 
 ```bash
-cd trainer
-python lm.py                       # 使用 configs/model/lm.yaml
-python vlm.py --config ../configs/model/vlm_moe.yaml
-python vam.py --epochs 5           # 在 vam.yaml 基础上覆盖单字段
+bash runs/lm.sh                                  # 使用 configs/model/lm.yaml
+bash runs/vlm.sh --config configs/model/vlm_moe.yaml
+bash runs/vam.sh --epochs 5                      # 在 vam.yaml 基础上覆盖单字段
 ```
 
 ### 推理 / 对话
