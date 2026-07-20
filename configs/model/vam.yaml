@@ -1,6 +1,6 @@
 # VAM 训练配置（文本 + 视觉 + 语音全模态）
 model:
-  hidden_size: 768
+  hidden_size: 512
   num_hidden_layers: 8
   use_moe: 0            # 1 启用 MoE
   vocab_size: 6400
@@ -10,7 +10,7 @@ model:
   dropout: 0.0
   # Talker（语音生成）相关
   num_talker_hidden_layers: 4
-  talker_hidden_size: 768
+  talker_hidden_size: 512
   # 音频相关
   audio_special_token: "<|audio_pad|>"
   audio_ids: [16]

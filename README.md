@@ -100,9 +100,16 @@ pip install -e ".[rl,serve,demo]"
 也可通过 `--config` 指定其它配置，任意 CLI 参数都能覆盖 YAML 中的默认值：
 
 ```bash
+bash runs/train_tokenizer.sh --data_path dataset/sft_t2t_mini.jsonl \
+                             --vocab_size 6400 \
+                             --checkpoint_dir ../checkpoint \
+                             --no_eval
+
 bash runs/lm.sh                                  # 使用 configs/model/lm.yaml
 bash runs/vlm.sh --config configs/model/vlm_moe.yaml
 bash runs/vam.sh --epochs 5                      # 在 vam.yaml 基础上覆盖单字段
+
+
 ```
 
 ### 推理 / 对话

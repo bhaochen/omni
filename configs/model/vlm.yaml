@@ -1,6 +1,6 @@
 # VLM 训练配置（文本 + 视觉多模态）
 model:
-  hidden_size: 768
+  hidden_size: 512
   num_hidden_layers: 8
   use_moe: 0            # 1 启用 MoE
   vocab_size: 6400
