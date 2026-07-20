@@ -28,7 +28,7 @@ docs/                 ↔  src/
 ### core/（基础组件）
 | 文档 | 说明 |
 | --- | --- |
-| [组件索引](core/README.md) | 与模态无关的纯 Transformer 组件总览 |
+| [组件索引](core/index.md) | 与模态无关的纯 Transformer 组件总览 |
 | [RMSNorm](core/norm.md) | RMSNorm 实现与数值技巧 |
 | [RoPE](core/rope.md) | 旋转位置编码（含 YaRN）、`repeat_kv` |
 | [Attention](core/attention.md) | 带 QK-Norm + GQA 的注意力 |
@@ -38,7 +38,7 @@ docs/                 ↔  src/
 ### models/（模型拼装）
 | 文档 | 说明 |
 | --- | --- |
-| [模型索引](models/README.md) | `lm` / `vlm` / `vam` 三子包拼装、继承链、共享主干 |
+| [模型索引](models/index.md) | `lm` / `vlm` / `vam` 三子包拼装、继承链、共享主干 |
 | [LM](models/lm.md) | 纯文本主干 `LM` + `LMForCausalLM` |
 | [VLM](models/vlm.md) | 文本 + 图像（SigLIP 编码器 + 视觉投影） |
 | [VAM](models/vam.md) | 文本 + 图像 + 语音，`TalkerModule` 双 head |
@@ -46,39 +46,39 @@ docs/                 ↔  src/
 ### dataset/（数据集）
 | 文档 | 说明 |
 | --- | --- |
-| [数据集索引](dataset/README.md) | `dataset/` 每类一个文件的数据集、loss mask、批次拼接 |
+| [数据集索引](dataset/index.md) | `dataset/` 每类一个文件的数据集、loss mask、批次拼接 |
 
 ### encoders/（多模态编码器）
 | 文档 | 说明 |
 | --- | --- |
-| [编码器索引](encoders/README.md) | `SiglipVisionEncoder` / `SenseVoiceAudioEncoder` |
+| [编码器索引](encoders/index.md) | `SiglipVisionEncoder` / `SenseVoiceAudioEncoder` |
 
 ### projectors/（模态桥接层）
 | 文档 | 说明 |
 | --- | --- |
-| [桥接层索引](projectors/README.md) | `MMVisionProjector` / `MMAudioProjector`、注入范式 |
+| [桥接层索引](projectors/index.md) | `MMVisionProjector` / `MMAudioProjector`、注入范式 |
 
 ### serve/（实时语音会话）
 | 文档 | 说明 |
 | --- | --- |
-| [服务索引](serve/README.md) | `SileroVAD` / `RealtimeSession` 端到端语音链路 |
+| [服务索引](serve/index.md) | `SileroVAD` / `RealtimeSession` 端到端语音链路 |
 
 ### trainers/（训练脚本）
 | 文档 | 说明 |
 | --- | --- |
-| [训练索引](trainers/README.md) | 按模态组织的 trainer 模块分布 |
+| [训练索引](trainers/index.md) | 按模态组织的 trainer 模块分布 |
 | [Trainers](trainers/trainers.md) | 各 trainer 模块概览与通用训练循环 |
 
 ### utils/（训练工具）
 | 文档 | 说明 |
 | --- | --- |
-| [工具索引](utils/README.md) | `training` / `checkpoint` / `distributed` / `multimodal` 工具分布 |
+| [工具索引](utils/index.md) | `training` / `checkpoint` / `distributed` / `multimodal` 工具分布 |
 | [配置与命令行](utils/config-and-cli.md) | YAML 配置驱动训练、`apply_config` 机制、tokenizer 训练、启动示例 |
 
 ### 面试速查
 | 文档 | 说明 |
 | --- | --- |
-| [面试准备](interview/README.md) | 高频问题 + 一句话答法，按主题组织 |
+| [面试准备](interview/面试速查.md) | 高频问题 + 一句话答法，按主题组织 |
 
 ## 命名约定（本仓库）
 
