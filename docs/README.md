@@ -1,20 +1,53 @@
 # Omni 开发文档
 
-面向**学习与面试**的模块化开发文档。本仓库把 MiniMind / MiniMind-V / MiniMind-O 三套代码融合成一个按模态分层的训练 / 推理框架。
+> Omni — 把 MiniMind / MiniMind-V / MiniMind-O 三套代码融合成一个按模态分层（文本 / 视觉 / 全模态）的训练 + 推理框架。面向**学习与面试**的模块化开发文档。
 
-> 阅读顺序建议：先看 `01-architecture-overview.md` 建立全局视图，再按子系统深入 `core/` `models/` `training/` 等。
+## 目录
 
-## 文档地图
-
-| 主题 | 入口 |
+### 架构
+| 文档 | 说明 |
 | --- | --- |
-| 全局架构、目录、数据流 | [01-architecture-overview.md](01-architecture-overview.md) |
-| 基础组件（norm / rope / attention / mlp / block） | [core/README.md](core/README.md) |
-| 模型（LM / VLM / VAM） | [models/README.md](models/README.md) |
-| 数据集 | [data/README.md](data/README.md) |
-| 训练（配置、trainer） | [training/README.md](training/README.md) |
-| 多模态（encoder / projector / serve） | [multimodal/README.md](multimodal/README.md) |
-| 面试速查 | [interview/README.md](interview/README.md) |
+| [架构总览](architecture/overview.md) | 能力分层设计、模型能力矩阵、前向数据流、训练入口、关键设计取舍（面试可聊） |
+
+### 基础组件（core/）
+| 文档 | 说明 |
+| --- | --- |
+| [组件索引](core/README.md) | 与模态无关的纯 Transformer 组件（norm / rope / attention / mlp / block）总览 |
+| [RMSNorm](core/norm.md) | RMSNorm 实现与数值技巧 |
+| [RoPE](core/rope.md) | 旋转位置编码（含 YaRN）、`repeat_kv` |
+| [Attention](core/attention.md) | 带 QK-Norm + GQA 的注意力 |
+| [MLP / MoE](core/mlp.md) | SwiGLU FFN 与 MoE 前馈 |
+| [Block](core/block.md) | Pre-Norm Transformer 块、MoE 可插拔 |
+
+### 模型（models/）
+| 文档 | 说明 |
+| --- | --- |
+| [模型索引](models/README.md) | `lm` / `vlm` / `vam` 三子包拼装、继承链、共享主干 |
+| [LM](models/lm.md) | 纯文本主干 `LM` + `LMForCausalLM` |
+| [VLM](models/vlm.md) | 文本 + 图像（SigLIP 编码器 + 视觉投影） |
+| [VAM](models/vam.md) | 文本 + 图像 + 语音，`TalkerModule` 双 head |
+
+### 训练（training/）
+| 文档 | 说明 |
+| --- | --- |
+| [训练索引](training/README.md) | 训练工具与 trainer 模块分布 |
+| [配置与命令行](training/config-and-cli.md) | YAML 配置驱动训练、`apply_config` 机制、tokenizer 训练、启动示例 |
+| [Trainers](training/trainers.md) | 各 trainer 模块概览与通用训练循环 |
+
+### 数据（data/）
+| 文档 | 说明 |
+| --- | --- |
+| [数据集索引](data/README.md) | `dataset/` 每类一个文件的数据集、loss mask、批次拼接 |
+
+### 多模态（multimodal/）
+| 文档 | 说明 |
+| --- | --- |
+| [多模态扩展](multimodal/README.md) | 外部模态接入三段式：encoder → projector → 占位 token 替换；实时语音会话 |
+
+### 面试速查
+| 文档 | 说明 |
+| --- | --- |
+| [面试准备](interview/README.md) | 高频问题 + 一句话答法，按主题组织 |
 
 ## 命名约定（本仓库）
 
