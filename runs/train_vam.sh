@@ -5,4 +5,4 @@ set -e
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PYTHONPATH="$ROOT/src:${PYTHONPATH}"
-exec python -m trainers.vam.full_sft --config "$ROOT/configs/vam.yaml" "$@"
+exec uv run python -m trainers.vam.full_sft --config "$ROOT/configs/vam.yaml" "$@"

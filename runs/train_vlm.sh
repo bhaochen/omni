@@ -5,4 +5,4 @@ set -e
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PYTHONPATH="$ROOT/src:${PYTHONPATH}"
-exec python -m trainers.vlm.full_sft --config "$ROOT/configs/vlm.yaml" "$@"
+exec uv run python -m trainers.vlm.full_sft --config "$ROOT/configs/vlm.yaml" "$@"
