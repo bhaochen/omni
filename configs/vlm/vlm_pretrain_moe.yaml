@@ -28,10 +28,11 @@ train:
   dtype: bfloat16
   save_interval: 1000
   log_interval: 100
-  from_weight: pretrain   # none / pretrain / full_sft
+  from_weight: pretrain   # none / pretrain / full_sft（对应 checkpoint/pretrain_512_moe.pth）
   from_resume: 0
 
 paths:
-  save_dir: checkpoint/vlm_moe
-  data_path: dataset/vlm_data.parquet
-  vision_model_path: model/siglip2-base-p32-256-ve
+  save_dir: checkpoint
+  data_path: dataset/vlm/sft_i2t.parquet
+  vision_dir: checkpoint/siglip
+  tokenizer_dir: checkpoint/omni/native_hf

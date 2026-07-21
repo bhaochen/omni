@@ -101,11 +101,15 @@ def main(default_config=None):
     parser.add_argument('--num_hidden_layers', default=8, type=int, help="隐藏层数量")
     parser.add_argument('--max_seq_len', default=768, type=int, help="训练的最大截断长度")
     parser.add_argument('--use_moe', default=0, type=int, choices=[0, 1], help="是否使用MoE架构（0=否，1=是）")
-    parser.add_argument("--data_path", type=str, default="../dataset/sft_i2t.parquet", help="训练数据路径")
+    parser.add_argument("--data_path", type=str, default="../dataset/vlm/sft_i2t.parquet", help="训练数据路径")
     parser.add_argument('--from_weight', default='pretrain_vlm', type=str, help="基于哪个权重训练，为none则不基于任何权重训练")
+    parser.add_argument('--weight_path', type=str, default=None, help="直接指定权重文件路径，优先级高于 from_weight（如 checkpoint/omni/omni.pth）")
+    parser.add_argument('--model_dir', default=None, type=str, help="预训练权重所在目录（默认同save_dir），配合from_weight使用")
     parser.add_argument('--from_resume', default=0, type=int, choices=[0, 1], help="是否自动检测&续训（0=否，1=是）")
     parser.add_argument('--freeze_llm', default=1, type=int, choices=[0, 1, 2], help="冻结策略（0=完全可训练，1=冻结+解冻首尾层，2=完全冻结仅训练proj）")
     parser.add_argument("--use_compile", default=0, type=int, choices=[0, 1], help="是否使用torch.compile加速（0=否，1=是）")
+    parser.add_argument("--vision_dir", type=str, default=None, help="视觉模型路径（默认 ../model/siglip2-base-p32-256-ve）")
+    parser.add_argument("--tokenizer_dir", type=str, default=None, help="tokenizer 路径（默认 ../model）")
     parser.add_argument("--use_wandb", action="store_true", help="是否使用wandb")
     parser.add_argument("--wandb_project", type=str, default="MiniMind-V-SFT", help="wandb项目名")
     args = apply_config(parser, default_config)
@@ -136,7 +140,11 @@ def main(default_config=None):
         wandb.init(project=args.wandb_project, name=wandb_run_name, id=wandb_id, resume=resume)
 
     # ========== 5. 定义模型、数据、优化器 ==========
-    model, tokenizer = init_vlm_model(vlm_config, from_weight=args.from_weight, device=args.device, freeze_llm=args.freeze_llm)
+    model, tokenizer = init_vlm_model(vlm_config, from_weight=args.from_weight, device=args.device,
+                                       freeze_llm=args.freeze_llm, save_dir=args.save_dir,
+                                       tokenizer_path=args.tokenizer_dir or '../model',
+                                       vision_model_path=args.vision_dir or '../model/siglip2-base-p32-256-ve',
+                                       weight_path=args.weight_path, model_dir=args.model_dir)
     preprocess = model.vision_encoder.processor
     train_ds = VLMDataset(args.data_path, tokenizer, preprocess=preprocess, image_special_token=vlm_config.image_special_token, image_token_len=vlm_config.image_token_len, max_length=vlm_config.max_seq_len)
     train_sampler = DistributedSampler(train_ds) if dist.is_initialized() else None

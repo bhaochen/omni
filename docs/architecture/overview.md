@@ -42,7 +42,7 @@ input_ids
 
 ```
 python -m trainers.lm.full_sft   --config configs/lm/lm_full_sft.yaml
-python -m trainers.vlm.full_sft  --config configs/vlm/vlm.yaml
+python -m trainers.vlm.full_sft  --config configs/vlm/vlm_sft.yaml
 python -m trainers.vam.full_sft  --config configs/vam/vam.yaml
 ```
 

@@ -23,7 +23,7 @@ def apply_config(parser, default_config=None):
 ```
 configs/
 ├── lm/         # lm_pretrain.yaml / lm_full_sft.yaml / lm_pretrain_mini.yaml / lm_full_sft_mini.yaml / lm_pretrain_moe.yaml / lm_full_sft_moe.yaml
-├── vlm/        # vlm.yaml / vlm_moe.yaml
+├── vlm/        # vlm_pretrain.yaml / vlm_pretrain_moe.yaml / vlm_sft.yaml / vlm_sft_moe.yaml
 └── vam/        # vam.yaml / vam_moe.yaml
 checkpoint/
 └── tokenizer/  # tokenizer.json / tokenizer_config.json
@@ -57,7 +57,7 @@ trainer 用 `LMConfig(**vars(args))`（或 `VLMConfig` / `VAMConfig`）构造模
 
 ```bash
 python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
-python -m trainers.vlm.full_sft --config configs/vlm/vlm_moe.yaml
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft_moe.yaml
 python -m trainers.vam.full_sft --config configs/vam/vam.yaml --epochs 10
 python -m trainers.lm.train_tokenizer --data_path dataset/lm/sft_t2t_mini.jsonl \
                                       --vocab_size 6400 --no_eval

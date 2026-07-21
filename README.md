@@ -137,11 +137,12 @@ python -m trainers.lm.full_sft --config configs/lm/lm_full_sft_mini.yaml
 
 ```bash
 # 预训练（视觉模态对齐）
-python -m trainers.vlm.pretrain --config configs/vlm/vlm.yaml
+python -m trainers.vlm.pretrain --config configs/vlm/vlm_pretrain.yaml
+python -m trainers.vlm.pretrain --config configs/vlm/vlm_pretrain_moe.yaml   # MoE 变体
 
 # 全量 SFT
-python -m trainers.vlm.full_sft --config configs/vlm/vlm.yaml
-python -m trainers.vlm.full_sft --config configs/vlm/vlm_moe.yaml   # MoE 变体
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft.yaml
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft_moe.yaml   # MoE 变体
 ```
 
 #### 全模态 VAM（文本 + 视觉 + 语音）

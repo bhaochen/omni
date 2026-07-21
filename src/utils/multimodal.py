@@ -26,14 +26,18 @@ def get_vlm_model_params(model, config, ignore_patterns=('vision_encoder',)):
         Logger(f'Model Params: {total:.2f}M')
 
 
-def init_vlm_model(vlm_config, from_weight='pretrain_vlm', tokenizer_path='../model', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_llm=0):
+def init_vlm_model(vlm_config, from_weight='pretrain_vlm', tokenizer_path='../model', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_llm=0, weight_path=None, model_dir=None):
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     model = VLM(vlm_config, vision_model_path=vision_model_path)
 
-    if from_weight != 'none':
+    if weight_path:
+        weights = torch.load(weight_path, map_location=device)
+        model.load_state_dict(weights, strict=False)
+    elif from_weight != 'none':
         moe_suffix = '_moe' if vlm_config.use_moe else ''
-        weight_path = f'{save_dir}/{from_weight}_{vlm_config.hidden_size}{moe_suffix}.pth'
+        weight_dir = model_dir or save_dir
+        weight_path = f'{weight_dir}/{from_weight}.pth'
         weights = torch.load(weight_path, map_location=device)
         model.load_state_dict(weights, strict=False)
 

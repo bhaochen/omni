@@ -27,6 +27,7 @@ train:
   from_resume: 0
 
 paths:
-  save_dir: checkpoint/vlm
-  data_path: dataset/vlm_data.parquet
-  vision_model_path: model/siglip2-base-p32-256-ve
+  save_dir: checkpoint
+  data_path: dataset/vlm/sft_i2t.parquet
+  vision_dir: checkpoint/siglip
+  tokenizer_dir: checkpoint/omni/native_hf
