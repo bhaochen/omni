@@ -22,7 +22,10 @@ def apply_config(parser, default_config=None):
 
 ```
 configs/
-├── model/      # lm / lm_moe / vlm / vlm_moe / vam / vam_moe .yaml
+├── lm/         # lm_pretrain.yaml / lm_full_sft.yaml / lm_pretrain_mini.yaml / lm_full_sft_mini.yaml / lm_pretrain_moe.yaml / lm_full_sft_moe.yaml
+├── vlm/        # vlm.yaml / vlm_moe.yaml
+└── vam/        # vam.yaml / vam_moe.yaml
+checkpoint/
 └── tokenizer/  # tokenizer.json / tokenizer_config.json
 ```
 

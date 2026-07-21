@@ -28,7 +28,10 @@ class LM(nn.Module):
 
     def forward(self, input_ids, ...):
         h = self.dropout(self.embed_tokens(input_ids))
-        position_embeddings = (freqs_cos[start:], freqs_sin[start:])   # 按 past 长度切片
+        if self.freqs_cos[0, 0] != 1.0:            # 未初始化时重算
+            freqs_cos, freqs_sin = precompute_freqs_cis(...)
+            self.freqs_cos, self.freqs_sin = freqs_cos.to(device=h.device, dtype=h.dtype), ...
+        position_embeddings = (self.freqs_cos[start:], self.freqs_sin[start:])   # 按 past 长度切片
         presents = []
         for layer, past in zip(self.layers, past_key_values):
             h, present = layer(h, position_embeddings, past_key_value=past, ...)
@@ -38,7 +41,7 @@ class LM(nn.Module):
         return h, presents, aux_loss
 ```
 
-- `freqs_cos/sin` 用 `persistent=False` buffer 缓存，不进 state_dict；首次前向若 buffer 为 0 会重新计算并搬到设备。
+- `freqs_cos/sin` 用 `persistent=False` 注册，不进 state_dict（节省 3 MB 冗余）；HF `from_pretrained` 创建模型时在 meta device，非持久 buffer 之后用 `torch.empty_like` 分配（未初始化内存）。forward 内 guard `if self.freqs_cos[0, 0] != 1.0` 捕获异常值并自动重算（cos(0)=1，未初始化的 0/NaN/随机值均会触发）。
 - `aux_loss` 仅在 MoE 时非 0，供 `LMForCausalLM` 加到总损失。
 
 ## LMForCausalLM（带 head + 损失 + 生成）
@@ -46,6 +49,7 @@ class LM(nn.Module):
 ```python
 class LMForCausalLM(PreTrainedModel, GenerationMixin):
     config_class = LMConfig
+    model_type = "omni"
     _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}
 
     def __init__(self, config):

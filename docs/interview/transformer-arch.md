@@ -416,21 +416,30 @@ class MOEFeedForward(nn.Module):
 
 ### 问题
 
-`torch.compile` 会重新初始化 buffer，导致 RoPE 的 freqs_cos/freqs_sin 变成零。
+两个场景会导致 RoPE 的 `freqs_cos`/`freqs_sin` 被重置为未初始化内存：
+
+1. **HF `from_pretrained`**：创建模型时在 meta device 上，非持久 buffer 之后用 `torch.empty_like` 分配（含随机/NaN 值）。
+2. **`torch.compile`**：编译后的重新初始化也会使 buffer 值丢失。
 
 ### 本仓库解决方案
 
 ```python
-class LM(nn.Module):
-    def forward(self, x, start_pos=0, freqs_cos=None, freqs_sin=None, mask=None):
-        # 延迟 RoPE 初始化
-        if freqs_cos is not None and freqs_cos[0, 0] == 0:
-            freqs_cos, freqs_sin = precompute_freqs_cis(...)
+# register_buffer 使用 persistent=False 避免冗余
+self.register_buffer("freqs_cos", freqs_cos, persistent=False)
+self.register_buffer("freqs_sin", freqs_sin, persistent=False)
+
+def forward(self, input_ids, ...):
+    h = self.dropout(self.embed_tokens(input_ids))
+    # 延迟初始化：检查 cos(0) 是否 != 1.0（未初始化时为 0/NaN/随机值）
+    if self.freqs_cos[0, 0] != 1.0:
+        freqs_cos, freqs_sin = precompute_freqs_cis(...)
+        self.freqs_cos = freqs_cos.to(device=h.device, dtype=h.dtype)
+        self.freqs_sin = freqs_sin.to(device=h.device, dtype=h.dtype)
 ```
 
 ### 为什么有效？
 
-检查 `freqs_cos[0, 0] == 0` 可以检测 buffer 是否被重置，如果是则重新计算。
+`cos(0) = 1`，所以初始化的 buffer 第一元素恒为 1.0。检查 `!= 1.0` 能捕捉所有异常值（0、NaN、随机内存），比原来的 `== 0` 更鲁棒（未初始化内存可能是任意值而非精确零）。重算时同时 `.to(dtype=...)` 确保 dtype 与模型一致。
 
 ---
 

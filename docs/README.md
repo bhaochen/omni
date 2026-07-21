@@ -62,18 +62,19 @@ docs/                 ↔  src/
 | --- | --- |
 | [面试准备](interview/面试速查.md) | 高频问题 + 一句话答法，按主题组织 |
 
-## 命名约定（本仓库）
+## 类名
 
-类名已在融合过程中统一重命名，阅读代码/面试时对照：
-
-| 旧名（上游） | 本仓库 |
+| 类 | 说明 |
 | --- | --- |
-| `MiniMindModel` | `LM` |
-| `MiniMindForCausalLM` | `LMForCausalLM` |
-| `MiniMindConfig` | `LMConfig` |
-| `MiniMindVLM` | `VLM` |
-| `MiniMindOmni` | `VAM` |
-| `OmniConfig` | `VAMConfig` |
+| `LM` | 纯文本主干 |
+| `LMForCausalLM` | 文本模型（含 lm_head + 生成） |
+| `LMConfig` | 文本模型配置 |
+| `VLM` | 文本 + 视觉多模态 |
+| `VAM` | 全模态（文本 + 视觉 + 语音） |
+| `VAMConfig` | 全模态配置 |
+| `model_type = "omni"` | LM 架构 ID |
+| `model_type = "omni-v"` | VLM 架构 ID |
+| `model_type = "omni-o"` | VAM 架构 ID |
 
 包结构（已扁平化，无 `omni` 中间层）：
 

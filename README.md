@@ -181,8 +181,8 @@ python scripts/eval_llm.py --native --save_dir checkpoint/lm_pretrain_mini \
                            --weight pretrain --hidden_size 128
 
 # HuggingFace 格式（config.json + model.safetensors）
-python scripts/eval_llm.py --load_from checkpoint/omni \
-                           --tokenizer_path checkpoint/omni
+python scripts/eval_llm.py --load_from checkpoint/omni/native_hf \
+                           --tokenizer_path checkpoint/omni/native_hf
 
 python scripts/eval_llm.py --load_from checkpoint/lm_full_sft_mini/hf \
                            --tokenizer_path checkpoint/lm_full_sft_mini/hf
@@ -200,8 +200,13 @@ python scripts/convert_model.py checkpoint/lm_full_sft_mini/full_sft_128.pth \
                                checkpoint/lm_full_sft_mini/hf \
                                --tokenizer_path checkpoint/tokenizer
 
-# 省略 --mode，默认 omni；也可输出 Qwen3 兼容格式
-python scripts/convert_model.py checkpoint/omni/full_sft.pth output/dir --mode qwen
+# 也可输出 Qwen3 兼容格式（发布到 HF Hub）
+python scripts/convert_model.py checkpoint/omni/omni.pth output_dir --mode qwen \
+                               --tokenizer_path checkpoint/tokenizer
+
+# 自动推断 hidden_size / num_hidden_layers、自定义精度
+python scripts/convert_model.py checkpoint/omni/omni.pth output_dir --dtype bfloat16 \
+                               --hidden_size 768 --num_hidden_layers 8
 ```
 
 ## 配置说明
@@ -214,6 +219,8 @@ python scripts/convert_model.py checkpoint/omni/full_sft.pth output/dir --mode q
 - 去除 `omni` 中间包，模块直接置于 `src/` 下（`core` / `models` / `trainers` / `dataset` / `utils` …），统一绝对导入；
 - 类名统一：`MiniMindModel→LM`、`MiniMindVLM→VLM`、`MiniMindOmni→VAM`、`MiniMindConfig→LMConfig`、
   `MiniMindForCausalLM→LMForCausalLM`、`OmniConfig→VAMConfig`；
+- `model_type` 重命名：`"minimind"`→`"omni"`、`"minimind-v"`→`"omni-v"`、`"minimind-o"`→`"omni-o"`；
 - `trainer_utils.py` 拆分为 `utils/training.py`、`utils/distributed.py`、`utils/checkpoint.py`；
 - 训练脚本暴露 `main(default_config=None)`，既可由 `python -m trainers.<mod>` 调用，也可由根 `trainer/*.py` 调用；
-- `dataset/` 按数据集类型拆分为独立文件，供多模态扩展。
+- `dataset/` 按数据集类型拆分为独立文件，供多模态扩展；
+- 配置按模态分目录：`configs/lm/`、`configs/vlm/`、`configs/vam/`。

@@ -381,9 +381,14 @@ optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=0.1)
 
 ### 本仓库评估脚本（`scripts/eval_llm.py`）
 
-```python
-# 生成回复 + 即时交互评估
-python scripts/eval_llm.py --config configs/lm/lm_full_sft.yaml --checkpoint /path/to/full_sft_512.pth
+```bash
+# 原生 torch 格式
+python scripts/eval_llm.py --native --save_dir checkpoint/lm_full_sft_mini \
+                           --weight full_sft --hidden_size 128
+
+# HuggingFace 格式
+python scripts/eval_llm.py --load_from checkpoint/omni/native_hf \
+                           --tokenizer_path checkpoint/omni/native_hf
 ```
 
 ```
