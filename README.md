@@ -67,15 +67,11 @@ src/
 │   └── checkpoint.py  # checkpoint 读写辅助
 ├── serve/            # 实时语音会话（SileroVAD / RealtimeSession）
 configs/
-├── lm_full_sft.yaml       # 纯文本 SFT 训练配置
-├── lm_full_sft_moe.yaml   # 纯文本 MoE SFT 训练配置
-├── lm_pretrain.yaml       # 纯文本预训练配置
-├── lm_pretrain_moe.yaml   # 纯文本 MoE 预训练配置
-├── vlm.yaml          # 视觉多模态训练配置
-├── lm/               # 纯文本 LM 配置
+├── lm/               # 纯文本 LM 配置（pretrain / full_sft / MoE / mini）
 ├── vlm/              # 视觉多模态 VLM 配置
-├── vam/              # 全模态 VAM 配置
-└── tokenizer/        # tokenizer.json / tokenizer_config.json
+└── vam/              # 全模态 VAM 配置
+checkpoint/
+└── tokenizer/        # tokenizer.json / tokenizer_config.json（由 train_tokenizer.py 生成）
 scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_llm.py      # 命令行推理与对话
 ├── eval_vlm.py      # 视觉多模态推理
@@ -111,7 +107,7 @@ python -m trainers.lm.pretrain --config configs/lm/lm_pretrain.yaml
 # 全量 SFT（以预训练权重初始化，指令微调）
 python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
 
-# 训练 tokenizer（学习用，MiniMind 已自带）
+# 训练 tokenizer
 python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
                                       --vocab_size 6400 \
                                       --checkpoint_dir ./checkpoint \
@@ -177,7 +173,23 @@ torchrun --nproc_per_node=4 -m trainers.lm.full_sft --config configs/lm/lm_full_
 ### 推理 / 对话
 
 ```bash
-python scripts/eval_llm.py --load_from ../model --weight full_sft
+# 加载 SFT 模型对话（mini 版）
+python scripts/eval_llm.py --save_dir checkpoint/lm_full_sft_mini \
+                           --weight full_sft --hidden_size 128 --native
+
+# 加载 pretrain 模型（仅续写，无对话格式）
+python scripts/eval_llm.py --save_dir checkpoint/lm_pretrain_mini \
+                           --weight pretrain --hidden_size 128 --native
+
+# 全量版（hidden_size=512）
+python scripts/eval_llm.py --save_dir checkpoint/lm/full_sft \
+                           --weight full_sft --hidden_size 512 --native
+
+# 多模态视觉 VLM
+python scripts/eval_vlm.py --save_dir checkpoint/vlm --weight full_sft
+
+# 全模态 VAM（文本 + 视觉 + 语音）
+python scripts/eval_vam.py --save_dir checkpoint/vam --weight full_sft
 ```
 
 ## 配置说明
