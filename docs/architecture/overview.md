@@ -42,9 +42,9 @@ input_ids
 
 ```
 runs/
-├── lm.sh    → python -m trainers.lm.full_sft   --config configs/model/lm.yaml
-├── vlm.sh   → python -m trainers.vlm.full_sft  --config configs/model/vlm.yaml
-└── vam.sh   → python -m trainers.vam.full_sft  --config configs/model/vam.yaml
+├── lm.sh    → python -m trainers.lm.full_sft   --config configs/lm.yaml
+├── vlm.sh   → python -m trainers.vlm.full_sft  --config configs/vlm.yaml
+└── vam.sh   → python -m trainers.vam.full_sft  --config configs/vam.yaml
 ```
 
 配置读取：`utils.training.apply_config(parser, default_config)` 把 YAML 的

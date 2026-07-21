@@ -53,8 +53,8 @@ trainer 用 `LMConfig(**vars(args))`（或 `VLMConfig` / `VAMConfig`）构造模
 ## 启动
 
 ```bash
-bash runs/lm.sh                                   # 默认 configs/model/lm.yaml
-bash runs/vlm.sh --config configs/model/vlm_moe.yaml
+bash runs/lm.sh                                   # 默认 configs/lm.yaml
+bash runs/vlm.sh --config configs/vlm_moe.yaml
 bash runs/vam.sh --epochs 10                       # 覆盖单字段
 bash runs/train_tokenizer.sh                      # 训练 tokenizer（学习用），保存到 checkpoint/tokenizer/
 ```

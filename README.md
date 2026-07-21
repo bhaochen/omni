@@ -67,12 +67,17 @@ src/
 │   └── checkpoint.py  # checkpoint 读写辅助
 ├── serve/            # 实时语音会话（SileroVAD / RealtimeSession）
 configs/
-├── model/            # lm / lm_moe / vlm / vlm_moe / vam / vam_moe 训练配置
+├── lm.yaml           # 纯文本训练配置
+├── lm_moe.yaml       # 纯文本 MoE 训练配置
+├── vlm.yaml          # 视觉多模态训练配置
+├── vlm_moe.yaml      # 视觉多模态 MoE 训练配置
+├── vam.yaml          # 全模态训练配置
+├── vam_moe.yaml      # 全模态 MoE 训练配置
 └── tokenizer/        # tokenizer.json / tokenizer_config.json
-runs/                # 根目录可直接运行的训练启动脚本（默认加载对应 configs/model/*.yaml）
-├── lm.sh            # bash runs/lm.sh  -> configs/model/lm.yaml
-├── vlm.sh           # bash runs/vlm.sh -> configs/model/vlm.yaml
-├── vam.sh           # bash runs/vam.sh -> configs/model/vam.yaml
+runs/                # 根目录可直接运行的训练启动脚本（默认加载对应 configs/*.yaml）
+├── lm.sh            # bash runs/lm.sh  -> configs/lm.yaml
+├── vlm.sh           # bash runs/vlm.sh -> configs/vlm.yaml
+├── vam.sh           # bash runs/vam.sh -> configs/vam.yaml
 └── train_tokenizer.sh  # bash runs/train_tokenizer.sh -> 训练 tokenizer，保存到 checkpoint/tokenizer/
 scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_llm.py      # 命令行推理与对话
@@ -87,6 +92,7 @@ scripts/              # 推理 / 服务 / 转换脚本
 ## 安装
 
 ```bash
+uv sync --no-default-groups --no-install-project
 pip install -e .
 # 可选依赖：RL 训练 / API 服务 / 演示
 pip install -e ".[rl,serve,demo]"
@@ -96,17 +102,17 @@ pip install -e ".[rl,serve,demo]"
 
 ### 训练（YAML 驱动）
 
-根目录 `runs/` 提供可直接运行的 `.sh` 启动脚本，默认加载 `configs/model/` 下对应的 YAML，
+根目录 `runs/` 提供可直接运行的 `.sh` 启动脚本，默认加载 `configs/` 下对应的 YAML，
 也可通过 `--config` 指定其它配置，任意 CLI 参数都能覆盖 YAML 中的默认值：
 
 ```bash
 bash runs/train_tokenizer.sh --data_path dataset/sft_t2t_mini.jsonl \
                              --vocab_size 6400 \
-                             --checkpoint_dir ../checkpoint \
+                             --checkpoint_dir ./checkpoint \
                              --no_eval
 
-bash runs/lm.sh                                  # 使用 configs/model/lm.yaml
-bash runs/vlm.sh --config configs/model/vlm_moe.yaml
+bash runs/lm.sh                                  # 使用 configs/lm.yaml
+bash runs/vlm.sh --config configs/vlm_moe.yaml
 bash runs/vam.sh --epochs 5                      # 在 vam.yaml 基础上覆盖单字段
 
 
@@ -120,7 +126,7 @@ python scripts/eval_llm.py --load_from ../model --weight full_sft
 
 ## 配置说明
 
-`configs/model/*.yaml` 分为 `model` / `train` / `paths` 三段，由 `utils.training.apply_config`
+`configs/*.yaml` 分为 `model` / `train` / `paths` 三段，由 `utils.training.apply_config`
 注入为 argparse 默认值；CLI 显式传参优先级更高。训练产出保存在 `checkpoint/` 目录。
 
 ## 与原 MiniMind 的差异
