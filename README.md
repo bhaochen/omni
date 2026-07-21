@@ -75,9 +75,9 @@ configs/
 ├── vam_moe.yaml      # 全模态 MoE 训练配置
 └── tokenizer/        # tokenizer.json / tokenizer_config.json
 runs/                # 根目录可直接运行的训练启动脚本（默认加载对应 configs/*.yaml）
-├── lm.sh            # bash runs/lm.sh  -> configs/lm.yaml
-├── vlm.sh           # bash runs/vlm.sh -> configs/vlm.yaml
-├── vam.sh           # bash runs/vam.sh -> configs/vam.yaml
+├── train_lm.sh      # bash runs/train_lm.sh  -> configs/lm.yaml
+├── train_vlm.sh     # bash runs/train_vlm.sh -> configs/vlm.yaml
+├── train_vam.sh     # bash runs/train_vam.sh -> configs/vam.yaml
 └── train_tokenizer.sh  # bash runs/train_tokenizer.sh -> 训练 tokenizer，保存到 checkpoint/tokenizer/
 scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_llm.py      # 命令行推理与对话
@@ -111,9 +111,9 @@ bash runs/train_tokenizer.sh --data_path dataset/sft_t2t_mini.jsonl \
                              --checkpoint_dir ./checkpoint \
                              --no_eval
 
-bash runs/lm.sh                                  # 使用 configs/lm.yaml
-bash runs/vlm.sh --config configs/vlm_moe.yaml
-bash runs/vam.sh --epochs 5                      # 在 vam.yaml 基础上覆盖单字段
+bash runs/train_lm.sh                                  # 使用 configs/lm.yaml
+bash runs/train_vlm.sh --config configs/vlm_moe.yaml
+bash runs/train_vam.sh --epochs 5                      # 在 vam.yaml 基础上覆盖单字段
 
 
 ```
