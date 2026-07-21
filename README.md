@@ -200,14 +200,20 @@ python scripts/convert_model.py checkpoint/lm_full_sft_mini/full_sft_128.pth \
                                checkpoint/lm_full_sft_mini/hf \
                                --tokenizer_path checkpoint/tokenizer
 
+# 从 .pth 转换到指定目录
+python scripts/convert_model.py checkpoint/omni/omni.pth checkpoint/omni/native_hf \
+                               --tokenizer_path <训练所用的 tokenizer 目录>
+
 # 也可输出 Qwen3 兼容格式（发布到 HF Hub）
 python scripts/convert_model.py checkpoint/omni/omni.pth output_dir --mode qwen \
-                               --tokenizer_path checkpoint/tokenizer
+                               --tokenizer_path <tokenizer 目录>
 
 # 自动推断 hidden_size / num_hidden_layers、自定义精度
 python scripts/convert_model.py checkpoint/omni/omni.pth output_dir --dtype bfloat16 \
                                --hidden_size 768 --num_hidden_layers 8
 ```
+
+> **注意**：`--tokenizer_path` 必须传入**训练时使用的同一个 tokenizer**，否则模型加载后输出乱码（vocab 映射错位）。
 
 ## 配置说明
 
