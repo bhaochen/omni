@@ -218,7 +218,7 @@ async def chat_completions(request: ChatRequest):
                 "id": f"chatcmpl-{int(time.time())}",
                 "object": "chat.completion",
                 "created": int(time.time()),
-                "model": "minimind",
+                "model": "omni",
                 "choices": [
                     {
                         "index": 0,

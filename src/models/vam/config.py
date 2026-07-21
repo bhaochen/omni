@@ -2,7 +2,7 @@ from models.lm.config import LMConfig
 
 
 class VAMConfig(LMConfig):
-    model_type = "minimind-o"
+    model_type = "omni-o"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

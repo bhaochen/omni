@@ -1,7 +1,7 @@
 """Rollout engines for RL training.
 
 To use the SGLang backend, first launch the server (with a transformers-format model):
-    python -m sglang.launch_server --model-path ./minimind-3 --attention-backend triton --host 0.0.0.0 --port 8998
+    python -m sglang.launch_server --model-path ./checkpoint/omni --attention-backend triton --host 0.0.0.0 --port 8998
 """
 import os
 import requests

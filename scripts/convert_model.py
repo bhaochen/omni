@@ -10,7 +10,7 @@ from models.lm.lora import apply_lora, merge_lora
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
-def convert_torch2transformers_minimind(torch_path, transformers_path, dtype=torch.float16):
+def convert_torch2transformers_omni(torch_path, transformers_path, dtype=torch.float16, tokenizer_path='checkpoint/tokenizer'):
     LMConfig.register_for_auto_class()
     LMForCausalLM.register_for_auto_class("AutoModelForCausalLM")
     lm_model = LMForCausalLM(lm_config)
@@ -21,7 +21,7 @@ def convert_torch2transformers_minimind(torch_path, transformers_path, dtype=tor
     model_params = sum(p.numel() for p in lm_model.parameters() if p.requires_grad)
     print(f'模型参数: {model_params / 1e6} 百万 = {model_params / 1e9} B (Billion)')
     lm_model.save_pretrained(transformers_path, safe_serialization=False)
-    tokenizer = AutoTokenizer.from_pretrained('../model/')
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     tokenizer.save_pretrained(transformers_path)
     # ======= transformers-5.0的兼容低版本写法 =======
     if int(transformers.__version__.split('.')[0]) >= 5:
@@ -30,11 +30,11 @@ def convert_torch2transformers_minimind(torch_path, transformers_path, dtype=tor
         config = json.load(open(config_path, 'r', encoding='utf-8'))
         config['rope_theta'] = lm_config.rope_theta; config['rope_scaling'] = None; del config['rope_parameters']
         json.dump(config, open(config_path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
-    print(f"模型已保存为 Transformers-MiniMind 格式: {transformers_path}")
+    print(f"模型已保存为 Transformers-Omni 格式: {transformers_path}")
 
 
 # QwenForCausalLM/LlamaForCausalLM结构兼容生态
-def convert_torch2transformers(torch_path, transformers_path, dtype=torch.float16):
+def convert_torch2transformers(torch_path, transformers_path, dtype=torch.float16, tokenizer_path='checkpoint/tokenizer'):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     state_dict = torch.load(torch_path, map_location=device)
     common_config = {
@@ -80,7 +80,7 @@ def convert_torch2transformers(torch_path, transformers_path, dtype=torch.float1
     qwen_model.save_pretrained(transformers_path)
     model_params = sum(p.numel() for p in qwen_model.parameters() if p.requires_grad)
     print(f'模型参数: {model_params / 1e6} 百万 = {model_params / 1e9} B (Billion)')
-    tokenizer = AutoTokenizer.from_pretrained('../model/')
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     tokenizer.save_pretrained(transformers_path)
 
     # ======= transformers-5.0的兼容低版本写法 =======
@@ -123,19 +123,28 @@ def convert_json_to_jinja(json_file_path, output_path):
 
 
 if __name__ == '__main__':
-    lm_config = LMConfig(hidden_size=768, num_hidden_layers=8, max_seq_len=8192, use_moe=False)
+    import argparse
+    parser = argparse.ArgumentParser(description="转换模型格式")
+    parser.add_argument('torch_path', type=str, help="输入 .pth 权重路径")
+    parser.add_argument('output_dir', type=str, help="输出目录")
+    parser.add_argument('--hidden_size', type=int, default=None, help="hidden_size（未指定则从 checkpoint 推断）")
+    parser.add_argument('--num_hidden_layers', type=int, default=None, help="层数（未指定则从 checkpoint 推断）")
+    parser.add_argument('--use_moe', action='store_true', help="MoE 架构")
+    parser.add_argument('--max_seq_len', type=int, default=8192, help="最大序列长度")
+    parser.add_argument('--mode', choices=['omni', 'qwen'], default='omni', help="输出格式（omni=原生LM格式, qwen=Qwen3兼容格式）")
+    parser.add_argument('--dtype', type=str, default='float16', help="权重精度")
+    parser.add_argument('--tokenizer_path', type=str, default='checkpoint/tokenizer', help="tokenizer 路径")
+    args = parser.parse_args()
 
-    # convert torch to transformers
-    torch_path = f"../checkpoint/full_sft_{lm_config.hidden_size}{'_moe' if lm_config.use_moe else ''}.pth"
-    transformers_path = '../minimind-3'
-    convert_torch2transformers(torch_path, transformers_path)
+    state = torch.load(args.torch_path, map_location='cpu')
+    hs = args.hidden_size or state['model.embed_tokens.weight'].shape[1]
+    nl = args.num_hidden_layers or (max(int(k.split('.')[2]) for k in state if k.startswith('model.layers.')) + 1)
+    dtype = getattr(torch, args.dtype)
 
-    # # merge lora
-    # base_torch_path = f"../checkpoint/full_sft_{lm_config.hidden_size}{'_moe' if lm_config.use_moe else ''}.pth"
-    # lora_path = f"../checkpoint/lora_identity_{lm_config.hidden_size}{'_moe' if lm_config.use_moe else ''}.pth"
-    # merged_torch_path = f"../checkpoint/merge_identity_{lm_config.hidden_size}{'_moe' if lm_config.use_moe else ''}.pth"
-    # convert_merge_base_lora(base_torch_path, lora_path, merged_torch_path)
+    lm_config = LMConfig(hidden_size=hs, num_hidden_layers=nl,
+                         max_seq_len=args.max_seq_len, use_moe=args.use_moe)
 
-    # convert_transformers2torch(transformers_path, torch_path)
-    # convert_json_to_jinja('../model/tokenizer_config.json', '../model/chat_template.jinja')
-    # convert_jinja_to_json('../model/chat_template.jinja')
+    if args.mode == 'omni':
+        convert_torch2transformers_omni(args.torch_path, args.output_dir, dtype, args.tokenizer_path)
+    else:
+        convert_torch2transformers(args.torch_path, args.output_dir, dtype, args.tokenizer_path)

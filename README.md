@@ -173,23 +173,35 @@ torchrun --nproc_per_node=4 -m trainers.lm.full_sft --config configs/lm/lm_full_
 ### 推理 / 对话
 
 ```bash
-# 加载 SFT 模型对话（mini 版）
-python scripts/eval_llm.py --save_dir checkpoint/lm_full_sft_mini \
-                           --weight full_sft --hidden_size 128 --native
+# 原生 torch 格式（.pth）
+python scripts/eval_llm.py --native --save_dir checkpoint/lm_full_sft_mini \
+                           --weight full_sft --hidden_size 128
 
-# 加载 pretrain 模型（仅续写，无对话格式）
-python scripts/eval_llm.py --save_dir checkpoint/lm_pretrain_mini \
-                           --weight pretrain --hidden_size 128 --native
+python scripts/eval_llm.py --native --save_dir checkpoint/lm_pretrain_mini \
+                           --weight pretrain --hidden_size 128
 
-# 全量版（hidden_size=512）
-python scripts/eval_llm.py --save_dir checkpoint/lm/full_sft \
-                           --weight full_sft --hidden_size 512 --native
+# HuggingFace 格式（config.json + model.safetensors）
+python scripts/eval_llm.py --load_from checkpoint/omni \
+                           --tokenizer_path checkpoint/omni
 
-# 多模态视觉 VLM
+python scripts/eval_llm.py --load_from checkpoint/lm_full_sft_mini/hf \
+                           --tokenizer_path checkpoint/lm_full_sft_mini/hf
+
+# 多模态（VLM / VAM）
 python scripts/eval_vlm.py --save_dir checkpoint/vlm --weight full_sft
-
-# 全模态 VAM（文本 + 视觉 + 语音）
 python scripts/eval_vam.py --save_dir checkpoint/vam --weight full_sft
+```
+
+### 格式转换
+
+```bash
+# 原生 torch → HuggingFace 格式（omni 原生）
+python scripts/convert_model.py checkpoint/lm_full_sft_mini/full_sft_128.pth \
+                               checkpoint/lm_full_sft_mini/hf \
+                               --tokenizer_path checkpoint/tokenizer
+
+# 省略 --mode，默认 omni；也可输出 Qwen3 兼容格式
+python scripts/convert_model.py checkpoint/omni/full_sft.pth output/dir --mode qwen
 ```
 
 ## 配置说明

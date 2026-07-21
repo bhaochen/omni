@@ -3,7 +3,7 @@ import argparse
 import random
 import warnings
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
+from transformers import AutoTokenizer, TextStreamer
 from models import LMConfig, LMForCausalLM
 from models.lm.lora import *  # noqa: F401,F403
 from utils.training import setup_seed, get_model_params
@@ -27,7 +27,7 @@ def init_model(args):
             apply_lora(model)
             load_lora(model, f'./{args.save_dir}/{args.lora_weight}_{args.hidden_size}.pth')
     else:
-        model = AutoModelForCausalLM.from_pretrained(args.load_from, trust_remote_code=True)
+        model = LMForCausalLM.from_pretrained(args.load_from)
     get_model_params(model, model.config)
     return model.half().eval().to(args.device), tokenizer
 

@@ -2,7 +2,7 @@ from models.lm.config import LMConfig
 
 
 class VLMConfig(LMConfig):
-    model_type = "minimind-v"
+    model_type = "omni-v"
 
     def __init__(self, image_special_token='<|image_pad|>', image_ids=[12], **kwargs):
         self.image_special_token = image_special_token
