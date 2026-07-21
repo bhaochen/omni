@@ -44,7 +44,7 @@ train:
   from_weight: pretrain
 paths:
   save_dir: checkpoint/lm
-  data_path: dataset/sft.jsonl
+  data_path: dataset/lm/sft.jsonl
 ```
 
 ## 配置如何真正生效
@@ -59,7 +59,7 @@ trainer 用 `LMConfig(**vars(args))`（或 `VLMConfig` / `VAMConfig`）构造模
 python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
 python -m trainers.vlm.full_sft --config configs/vlm/vlm_moe.yaml
 python -m trainers.vam.full_sft --config configs/vam/vam.yaml --epochs 10
-python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
+python -m trainers.lm.train_tokenizer --data_path dataset/lm/sft_t2t_mini.jsonl \
                                       --vocab_size 6400 --no_eval
 ```
 
@@ -74,7 +74,7 @@ python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
 常用参数：
 
 ```bash
-python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
+python -m trainers.lm.train_tokenizer --data_path dataset/lm/sft_t2t_mini.jsonl \
                                       --vocab_size 6400 \
                                       --checkpoint_dir ../checkpoint \
                                       --no_eval

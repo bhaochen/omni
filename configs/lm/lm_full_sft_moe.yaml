@@ -28,4 +28,4 @@ train:
 
 paths:
   save_dir: checkpoint/lm_moe
-  data_path: dataset/sft.jsonl
+  data_path: dataset/lm/sft.jsonl

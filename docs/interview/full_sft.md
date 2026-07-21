@@ -320,7 +320,7 @@ train:
 
 paths:
   save_dir: checkpoint/lm     # 训练产物存放目录
-  data_path: dataset/sft.jsonl
+  data_path: dataset/lm/sft.jsonl
 ```
 
 ### max_seq_len 为什么比 pretrain 大？

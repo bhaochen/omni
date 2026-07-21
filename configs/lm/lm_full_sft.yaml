@@ -24,4 +24,4 @@ train:
 
 paths:
   save_dir: checkpoint/lm
-  data_path: dataset/sft_t2t_mini.jsonl
+  data_path: dataset/lm/sft_t2t_mini.jsonl

@@ -391,7 +391,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_seq_len', default=1024, type=int, help="最大序列长度")
     parser.add_argument("--max_gen_len", type=int, default=768, help="单次最大生成长度")
     parser.add_argument("--max_total_len", type=int, default=2500, help="训练侧最终总长度上界")
-    parser.add_argument("--data_path", type=str, default="../dataset/agent_rl.jsonl", help="训练数据路径")
+    parser.add_argument("--data_path", type=str, default="../dataset/lm/agent_rl.jsonl", help="训练数据路径")
     parser.add_argument("--num_generations", type=int, default=4, help="每个prompt生成数量")
     parser.add_argument("--beta", type=float, default=0.1, help="KL散度惩罚系数")
     parser.add_argument("--loss_type", type=str, default="cispo", choices=["grpo", "cispo"], help="loss类型")

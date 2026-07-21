@@ -23,4 +23,4 @@ train:
 
 paths:
   save_dir: checkpoint/lm_pretrain
-  data_path: dataset/pretrain_t2t_mini.jsonl
+  data_path: dataset/lm/pretrain_t2t_mini.jsonl

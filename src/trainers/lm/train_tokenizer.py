@@ -5,7 +5,7 @@ import json
 import argparse
 from tokenizers import decoders, models, pre_tokenizers, trainers, Tokenizer
 
-DATA_PATH = '../dataset/sft_t2t_mini.jsonl'
+DATA_PATH = '../dataset/lm/sft_t2t_mini.jsonl'
 CHECKPOINT_DIR = '../checkpoint/'
 VOCAB_SIZE = 6400
 SPECIAL_TOKENS_NUM = 36

@@ -108,7 +108,7 @@ python -m trainers.lm.pretrain --config configs/lm/lm_pretrain.yaml
 python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
 
 # 训练 tokenizer
-python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
+python -m trainers.lm.train_tokenizer --data_path dataset/lm/sft_t2t_mini.jsonl \
                                       --vocab_size 6400 \
                                       --checkpoint_dir ./checkpoint \
                                       --no_eval
