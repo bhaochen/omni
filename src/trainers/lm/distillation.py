@@ -146,6 +146,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MiniMind Knowledge Distillation")
     parser.add_argument('--config', type=str, default=None, help='YAML 配置路径，其字段作为 argparse 默认值，CLI 显式传参可覆盖')
     parser.add_argument("--save_dir", type=str, default="../checkpoint", help="模型保存目录")
+    parser.add_argument("--tokenizer_dir", type=str, default="checkpoint/tokenizer", help="tokenizer 目录路径")
     parser.add_argument('--save_weight', default='full_dist', type=str, help="保存权重的前缀名")
     parser.add_argument("--epochs", type=int, default=6, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
@@ -202,9 +203,9 @@ if __name__ == "__main__":
         wandb.init(project=args.wandb_project, name=wandb_run_name, id=wandb_id, resume=resume)
     
     # ========== 5. 定义学生和教师模型 ==========
-    model, tokenizer = init_model(lm_config_student, args.from_student_weight, device=args.device)
+    model, tokenizer = init_model(lm_config_student, args.from_student_weight, save_dir=args.save_dir, tokenizer_dir=args.tokenizer_dir, device=args.device)
     Logger(f'学生模型总参数量：{sum(p.numel() for p in model.parameters()) / 1e6:.3f} M')
-    teacher_model, _ = init_model(lm_config_teacher, args.from_teacher_weight, device=args.device)
+    teacher_model, _ = init_model(lm_config_teacher, args.from_teacher_weight, save_dir=args.save_dir, tokenizer_dir=args.tokenizer_dir, device=args.device)
     teacher_model.eval()
     teacher_model.requires_grad_(False)
     Logger(f'教师模型总参数量：{sum(p.numel() for p in teacher_model.parameters()) / 1e6:.3f} M')

@@ -77,6 +77,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MiniMind LoRA Fine-tuning")
     parser.add_argument('--config', type=str, default=None, help='YAML 配置路径，其字段作为 argparse 默认值，CLI 显式传参可覆盖')
     parser.add_argument("--save_dir", type=str, default="../checkpoint", help="模型保存目录")
+    parser.add_argument("--tokenizer_dir", type=str, default="checkpoint/tokenizer", help="tokenizer 目录路径")
     parser.add_argument("--lora_name", type=str, default="lora_medical", help="LoRA权重名称(如lora_identity/lora_medical等)")
     parser.add_argument("--epochs", type=int, default=10, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
@@ -126,7 +127,7 @@ if __name__ == "__main__":
         wandb.init(project=args.wandb_project, name=wandb_run_name, id=wandb_id, resume=resume)
     
     # ========== 5. 定义模型、应用LoRA、冻结非LoRA参数 ==========
-    model, tokenizer = init_model(lm_config, args.from_weight, device=args.device)
+    model, tokenizer = init_model(lm_config, args.from_weight, save_dir=args.save_dir, tokenizer_dir=args.tokenizer_dir, device=args.device)
     apply_lora(model)
     
     # 统计参数

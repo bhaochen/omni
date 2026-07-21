@@ -295,6 +295,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MiniMind PPO (Proximal Policy Optimization)")
     parser.add_argument('--config', type=str, default=None, help='YAML 配置路径，其字段作为 argparse 默认值，CLI 显式传参可覆盖')
     parser.add_argument("--save_dir", type=str, default="../checkpoint", help="模型保存目录")
+    parser.add_argument("--tokenizer_dir", type=str, default="checkpoint/tokenizer", help="tokenizer 目录路径")
     parser.add_argument('--save_weight', default='ppo_actor', type=str, help="保存权重的前缀名")
     parser.add_argument("--epochs", type=int, default=1, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=2, help="batch size")
@@ -365,8 +366,8 @@ if __name__ == "__main__":
     # ========== 5. 初始化模型和数据 ==========
     base_weight = args.from_weight
     # Actor模型
-    actor_model, tokenizer = init_model(lm_config, base_weight, device=args.device)
-    ref_model, _ = init_model(lm_config, base_weight, device=args.device)
+    actor_model, tokenizer = init_model(lm_config, base_weight, save_dir=args.save_dir, tokenizer_dir=args.tokenizer_dir, device=args.device)
+    ref_model, _ = init_model(lm_config, base_weight, save_dir=args.save_dir, tokenizer_dir=args.tokenizer_dir, device=args.device)
     ref_model = ref_model.eval().requires_grad_(False)
     moe_suffix = '_moe' if lm_config.use_moe else ''
     ckp = f'{args.save_dir}/{base_weight}_{lm_config.hidden_size}{moe_suffix}.pth'

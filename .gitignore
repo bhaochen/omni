@@ -7,11 +7,11 @@ wheels/
 *.egg-info
 
 # dataset
-dataset/pretrain_t2t_mini.jsonl
-dataset/sft_t2t_mini.jsonl
-dataset/dpo.jsonl
-dataset/rlaif.jsonl
-dataset/agent_rl.jsonl
-dataset/agent_rl_math.jsonl
+# dataset/pretrain_t2t_mini.jsonl
+# dataset/sft_t2t_mini.jsonl
+# dataset/dpo.jsonl
+# dataset/rlaif.jsonl
+# dataset/agent_rl.jsonl
+# dataset/agent_rl_math.jsonl
 # Virtual environments
 .venv

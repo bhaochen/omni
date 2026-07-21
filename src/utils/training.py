@@ -158,8 +158,9 @@ def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoc
         return None
 
 
-def init_model(lm_config, from_weight='pretrain', tokenizer_path='../model', save_dir='../checkpoint', device='cuda'):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+def init_model(lm_config, from_weight='pretrain', save_dir='../checkpoint', tokenizer_dir=None, device='cuda'):
+    tokenizer_dir = tokenizer_dir or os.path.join(save_dir, 'tokenizer')
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
     model = LMForCausalLM(lm_config)
 
     if from_weight != 'none':
