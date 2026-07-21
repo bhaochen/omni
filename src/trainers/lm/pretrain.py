@@ -13,7 +13,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from models import LMConfig
 from dataset import PretrainDataset
-from utils.training import get_lr, Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, init_model, SkipBatchSampler
+from utils.training import get_lr, Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, init_model, SkipBatchSampler, init_logger
 from utils.training import apply_config  # noqa: F401
 
 warnings.filterwarnings('ignore')

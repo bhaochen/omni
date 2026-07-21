@@ -41,10 +41,9 @@ input_ids
 ## 4. 训练入口
 
 ```
-runs/
-├── lm.sh    → python -m trainers.lm.full_sft   --config configs/lm.yaml
-├── vlm.sh   → python -m trainers.vlm.full_sft  --config configs/vlm.yaml
-└── vam.sh   → python -m trainers.vam.full_sft  --config configs/vam.yaml
+python -m trainers.lm.full_sft   --config configs/lm/lm_full_sft.yaml
+python -m trainers.vlm.full_sft  --config configs/vlm/vlm.yaml
+python -m trainers.vam.full_sft  --config configs/vam/vam.yaml
 ```
 
 配置读取：`utils.training.apply_config(parser, default_config)` 把 YAML 的

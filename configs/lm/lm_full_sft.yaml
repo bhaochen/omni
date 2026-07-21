@@ -19,8 +19,9 @@ train:
   save_interval: 1000
   log_interval: 100
   from_weight: pretrain   # none / pretrain / full_sft
+  model_dir: checkpoint/lm_pretrain
   from_resume: 0
 
 paths:
   save_dir: checkpoint/lm
-  data_path: dataset/sft.jsonl
+  data_path: dataset/sft_t2t_mini.jsonl

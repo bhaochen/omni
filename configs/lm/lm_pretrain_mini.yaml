@@ -1,0 +1,26 @@
+# LM 预训练配置（小模型快速验证，~30分钟跑完）
+model:
+  hidden_size: 128
+  num_hidden_layers: 4
+  use_moe: 0
+  vocab_size: 6400
+  max_seq_len: 256
+  num_attention_heads: 8
+  num_key_value_heads: 4
+  dropout: 0.0
+
+train:
+  epochs: 1
+  batch_size: 96
+  learning_rate: 5.0e-4
+  accumulation_steps: 1
+  grad_clip: 1.0
+  dtype: bfloat16
+  save_interval: 500
+  log_interval: 50
+  from_weight: none
+  from_resume: 0
+
+paths:
+  save_dir: checkpoint/lm_pretrain_mini
+  data_path: dataset/pretrain_t2t_mini.jsonl

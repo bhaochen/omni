@@ -1,0 +1,27 @@
+# LM SFT 配置（小模型快速微调，使用 lm_pretrain_mini 的预训练权重）
+model:
+  hidden_size: 128
+  num_hidden_layers: 4
+  use_moe: 0
+  vocab_size: 6400
+  max_seq_len: 768
+  num_attention_heads: 8
+  num_key_value_heads: 4
+  dropout: 0.0
+
+train:
+  epochs: 1
+  batch_size: 32
+  learning_rate: 1.0e-5
+  accumulation_steps: 1
+  grad_clip: 1.0
+  dtype: bfloat16
+  save_interval: 500
+  log_interval: 50
+  from_weight: pretrain
+  model_dir: checkpoint/lm_pretrain_mini
+  from_resume: 0
+
+paths:
+  save_dir: checkpoint/lm_full_sft_mini
+  data_path: dataset/sft_t2t_mini.jsonl

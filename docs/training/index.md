@@ -24,7 +24,7 @@
 
 ## 训练脚本（Trainers）
 
-按模态组织的训练入口，每个脚本暴露 `main(default_config=None)`（可由 `python -m trainers.<mod>` 或 `runs/*.sh` 调用）。
+按模态组织的训练入口，每个脚本暴露 `main(default_config=None)`（通过 `python -m trainers.<mod>` 调用）。
 
 - `trainers/lm/`：pretrain / full_sft / lora / dpo / distillation / ppo / grpo / agent / rollout_engine / train_tokenizer
 - `trainers/vlm/`：pretrain / full_sft

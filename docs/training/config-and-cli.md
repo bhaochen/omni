@@ -53,10 +53,11 @@ trainer 用 `LMConfig(**vars(args))`（或 `VLMConfig` / `VAMConfig`）构造模
 ## 启动
 
 ```bash
-bash runs/train_lm.sh                                   # 默认 configs/lm.yaml
-bash runs/train_vlm.sh --config configs/vlm_moe.yaml
-bash runs/train_vam.sh --epochs 10                       # 覆盖单字段
-bash runs/train_tokenizer.sh                      # 训练 tokenizer（学习用），保存到 checkpoint/tokenizer/
+python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_moe.yaml
+python -m trainers.vam.full_sft --config configs/vam/vam.yaml --epochs 10
+python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
+                                      --vocab_size 6400 --no_eval
 ```
 
 ## Tokenizer 训练
@@ -70,10 +71,10 @@ bash runs/train_tokenizer.sh                      # 训练 tokenizer（学习用
 常用参数：
 
 ```bash
-bash runs/train_tokenizer.sh --data_path dataset/sft_t2t_mini.jsonl \
-                             --vocab_size 6400 \
-                             --checkpoint_dir ../checkpoint \
-                             --no_eval
+python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
+                                      --vocab_size 6400 \
+                                      --checkpoint_dir ../checkpoint \
+                                      --no_eval
 ```
 
 ## 要点（面试）

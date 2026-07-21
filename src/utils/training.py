@@ -158,14 +158,15 @@ def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoc
         return None
 
 
-def init_model(lm_config, from_weight='pretrain', save_dir='../checkpoint', tokenizer_dir=None, device='cuda'):
+def init_model(lm_config, from_weight='pretrain', save_dir='../checkpoint', tokenizer_dir=None, device='cuda', model_dir=None):
     tokenizer_dir = tokenizer_dir or os.path.join(save_dir, 'tokenizer')
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_dir)
     model = LMForCausalLM(lm_config)
 
     if from_weight != 'none':
         moe_suffix = '_moe' if lm_config.use_moe else ''
-        weight_path = f'{save_dir}/{from_weight}_{lm_config.hidden_size}{moe_suffix}.pth'
+        weight_dir = model_dir or save_dir
+        weight_path = f'{weight_dir}/{from_weight}_{lm_config.hidden_size}{moe_suffix}.pth'
         weights = torch.load(weight_path, map_location=device)
         model.load_state_dict(weights, strict=False)
 

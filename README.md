@@ -67,18 +67,15 @@ src/
 │   └── checkpoint.py  # checkpoint 读写辅助
 ├── serve/            # 实时语音会话（SileroVAD / RealtimeSession）
 configs/
-├── lm.yaml           # 纯文本训练配置
-├── lm_moe.yaml       # 纯文本 MoE 训练配置
+├── lm_full_sft.yaml       # 纯文本 SFT 训练配置
+├── lm_full_sft_moe.yaml   # 纯文本 MoE SFT 训练配置
+├── lm_pretrain.yaml       # 纯文本预训练配置
+├── lm_pretrain_moe.yaml   # 纯文本 MoE 预训练配置
 ├── vlm.yaml          # 视觉多模态训练配置
-├── vlm_moe.yaml      # 视觉多模态 MoE 训练配置
-├── vam.yaml          # 全模态训练配置
-├── vam_moe.yaml      # 全模态 MoE 训练配置
+├── lm/               # 纯文本 LM 配置
+├── vlm/              # 视觉多模态 VLM 配置
+├── vam/              # 全模态 VAM 配置
 └── tokenizer/        # tokenizer.json / tokenizer_config.json
-runs/                # 根目录可直接运行的训练启动脚本（默认加载对应 configs/*.yaml）
-├── train_lm.sh      # bash runs/train_lm.sh  -> configs/lm.yaml
-├── train_vlm.sh     # bash runs/train_vlm.sh -> configs/vlm.yaml
-├── train_vam.sh     # bash runs/train_vam.sh -> configs/vam.yaml
-└── train_tokenizer.sh  # bash runs/train_tokenizer.sh -> 训练 tokenizer，保存到 checkpoint/tokenizer/
 scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_llm.py      # 命令行推理与对话
 ├── eval_vlm.py      # 视觉多模态推理
@@ -102,20 +99,79 @@ pip install -e ".[rl,serve,demo]"
 
 ### 训练（YAML 驱动）
 
-根目录 `runs/` 提供可直接运行的 `.sh` 启动脚本，默认加载 `configs/` 下对应的 YAML，
-也可通过 `--config` 指定其它配置，任意 CLI 参数都能覆盖 YAML 中的默认值：
+训练入口统一为 `python -m trainers.<包>.<脚本>`，通过 `--config` 指定 YAML 配置，
+任意 CLI 参数都能覆盖 YAML 中的默认值：
+
+#### 纯文本 LM
 
 ```bash
-bash runs/train_tokenizer.sh --data_path dataset/sft_t2t_mini.jsonl \
-                             --vocab_size 6400 \
-                             --checkpoint_dir ./checkpoint \
-                             --no_eval
+# 预训练（从头训练语言模型）
+python -m trainers.lm.pretrain --config configs/lm/lm_pretrain.yaml
 
-bash runs/train_lm.sh                                  # 使用 configs/lm.yaml
-bash runs/train_vlm.sh --config configs/vlm_moe.yaml
-bash runs/train_vam.sh --epochs 5                      # 在 vam.yaml 基础上覆盖单字段
+# 全量 SFT（以预训练权重初始化，指令微调）
+python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
 
+# 训练 tokenizer（学习用，MiniMind 已自带）
+python -m trainers.lm.train_tokenizer --data_path dataset/sft_t2t_mini.jsonl \
+                                      --vocab_size 6400 \
+                                      --checkpoint_dir ./checkpoint \
+                                      --no_eval
 
+# LoRA 微调
+python -m trainers.lm.lora_sft --config configs/lm/lm_full_sft.yaml
+
+# DPO / PPO / GRPO 偏好对齐
+python -m trainers.lm.dpo   --config configs/lm/lm_full_sft.yaml
+python -m trainers.lm.ppo   --config configs/lm/lm_full_sft.yaml
+python -m trainers.lm.grpo  --config configs/lm/lm_full_sft.yaml
+
+# 知识蒸馏
+python -m trainers.lm.distill --teacher <teacher_path> --config configs/lm/lm_full_sft.yaml
+
+# MoE 变体
+python -m trainers.lm.full_sft --config configs/lm/lm_full_sft_moe.yaml
+python -m trainers.lm.pretrain --config configs/lm/lm_pretrain_moe.yaml
+
+# Mini 变体（快速验证用，h=128, L=4, ~14min pretrain）
+python -m trainers.lm.pretrain --config configs/lm/lm_pretrain_mini.yaml
+python -m trainers.lm.full_sft --config configs/lm/lm_full_sft_mini.yaml
+```
+
+#### 视觉多模态 VLM
+
+```bash
+# 预训练（视觉模态对齐）
+python -m trainers.vlm.pretrain --config configs/vlm/vlm.yaml
+
+# 全量 SFT
+python -m trainers.vlm.full_sft --config configs/vlm/vlm.yaml
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_moe.yaml   # MoE 变体
+```
+
+#### 全模态 VAM（文本 + 视觉 + 语音）
+
+```bash
+# 全量 SFT
+python -m trainers.vam.full_sft --config configs/vam/vam.yaml
+python -m trainers.vam.full_sft --config configs/vam/vam_moe.yaml   # MoE 变体
+```
+
+#### 常用覆盖参数
+
+```bash
+# 覆盖任意 YAML 字段
+python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml \
+                               --epochs 3 --batch_size 8 --learning_rate 5e-6
+
+python -m trainers.vam.full_sft --config configs/vam/vam.yaml --epochs 5
+
+# 指定 checkpoint 目录
+python -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml \
+                               --save_dir checkpoint/my_exp
+
+# 多卡 DDP 训练（torchrun）
+torchrun --nproc_per_node=4 -m trainers.lm.pretrain --config configs/lm/lm_pretrain.yaml
+torchrun --nproc_per_node=4 -m trainers.lm.full_sft --config configs/lm/lm_full_sft.yaml
 ```
 
 ### 推理 / 对话
