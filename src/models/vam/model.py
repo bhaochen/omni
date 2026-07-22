@@ -389,11 +389,16 @@ class VAM(LMForCausalLM):
                     audio_codes[i].append(self.audio_pad_token)
                 else:
                     logits_i = al[0, -1, :].clone().float() / 0.2
+                    logits_i = torch.nan_to_num(logits_i, nan=-100.0, posinf=-100.0, neginf=-100.0)
                     for prev_code in audio_codes[i][-3:]:
                         score = logits_i[prev_code]
                         logits_i[prev_code] = torch.where(score > 0, score / 1.05, score * 1.05)
                     top_val, top_idx = logits_i.topk(50)
-                    code = top_idx[torch.multinomial(F.softmax(top_val, dim=-1), 1)].item()
+                    probs = F.softmax(top_val, dim=-1)
+                    probs = torch.nan_to_num(probs)
+                    if probs.sum() <= 0:
+                        probs = torch.ones_like(probs) / probs.shape[-1]
+                    code = top_idx[torch.multinomial(probs, 1)].item()
                     audio_codes[i].append(code)
                     if audio_stop_pos[i] is None and code >= 2048:
                         audio_stop_pos[i] = len(audio_codes[i]) - 1
