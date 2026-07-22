@@ -329,12 +329,12 @@ def init_model(args):
             print(f'  Missing keys (expected for encoders): {len(missing)}')
         if unexpected:
             print(f'  Unexpected keys: {len(unexpected)}')
-        if model.audio_encoder is not None:
-            model.audio_encoder.to(args.device)
-        if model.vision_encoder is not None:
-            model.vision_encoder.to(args.device)
 
     M['model'] = model.half().eval().to(args.device)
+    if model.audio_encoder is not None:
+        model.audio_encoder.to(args.device)
+    if model.vision_encoder is not None:
+        model.vision_encoder.to(args.device)
 
     tok_dir = os.path.join(root, args.tokenizer_dir)
     from transformers import AutoTokenizer
