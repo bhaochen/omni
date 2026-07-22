@@ -7,8 +7,6 @@ import random
 from datasets import load_dataset, Features, Sequence, Value
 from PIL import Image
 from datasets import Dataset as HFDataset
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 

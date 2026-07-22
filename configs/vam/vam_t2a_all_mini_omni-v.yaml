@@ -36,6 +36,7 @@ train:
   accumulation_steps: 1
   grad_clip: 1.0
   dtype: bfloat16
+  device: cuda
   num_workers: 0
   save_interval: 5000
   log_interval: 50

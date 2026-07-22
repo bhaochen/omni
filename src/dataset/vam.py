@@ -4,8 +4,6 @@ import random
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 from dataset.common import pre_processing_chat, post_processing_chat
 
@@ -20,11 +18,13 @@ class VAMDataset(Dataset):
                  scheduled_sampling=0.05,
                  image_token_len=64, max_samples=None):
         super().__init__()
+        import pyarrow as pa
+        import pyarrow.parquet as pq
         tables = []
         total = 0
         for p in data_path.split(','):
             pf = pq.ParquetFile(p.strip())
-            for batch in pf.iter_batches(batch_size=65536):
+            for batch in pf.iter_batches(batch_size=4096):
                 tables.append(batch)
                 total += batch.num_rows
                 if max_samples is not None and total >= max_samples:
@@ -119,12 +119,17 @@ class VAMDataset(Dataset):
         import soundfile as sf
         import numpy as np
         import io
-        import librosa
+        import torch
         if not audio_bytes: return None, 0
         wav, sr = sf.read(io.BytesIO(audio_bytes))
         if wav.ndim > 1: wav = wav.mean(axis=1)
-        if sr != 16000: wav = librosa.resample(wav.astype(float), orig_sr=sr, target_sr=16000)
-        wav = self.augment_wav(wav.astype(np.float32))
+        wav = wav.astype(np.float32)
+        if sr != 16000:
+            import torchaudio.functional as AF
+            wav_t = torch.from_numpy(wav).unsqueeze(0)
+            wav_t = AF.resample(wav_t, sr, 16000)
+            wav = wav_t.squeeze(0).numpy()
+        wav = self.augment_wav(wav)
         inputs = self.audio_processor(wav, sampling_rate=16000, return_tensors="pt", return_attention_mask=True)
         valid_len = inputs.attention_mask.sum().item()
         return self.augment_mel(inputs.input_features.squeeze(0)), valid_len

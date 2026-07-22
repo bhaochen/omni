@@ -40,7 +40,7 @@ train:
   save_interval: 2000
   log_interval: 50
   from_weight: sft_omni
-  model_dir: checkpoint/vam_t2a_all_mini   # 加载 Stage 1 输出
+  model_dir: checkpoint/vam_t2a_all_mini_omni-v   # 加载 Stage 1 输出（omni-v variant）
   from_resume: 0
   freeze_backbone: none
   mode: audio_proj                         # 仅训练 audio_proj

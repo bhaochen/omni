@@ -1,6 +1,5 @@
 import io
 import json
-import pyarrow.parquet as pq
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
@@ -12,6 +11,7 @@ from dataset.common import VLM, pre_processing_chat, post_processing_chat
 class VLMDataset(Dataset):
     def __init__(self, parquet_path, tokenizer, preprocess=None, max_length=512, image_special_token='<|image_pad|>', image_token_len=64, max_samples=None):
         super().__init__()
+        import pyarrow.parquet as pq
         pf = pq.ParquetFile(parquet_path)
         total = pf.metadata.num_rows
         if max_samples is not None and max_samples < total:
