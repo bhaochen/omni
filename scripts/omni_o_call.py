@@ -112,8 +112,7 @@ def prepare_turn(text, samples, image_b64, do_asr_for_image):
     if image_b64:
         pixel_values = prep_image(image_b64)
         m = M['model']
-        img_tokens = m.config.image_special_token * m.config.image_token_len
-        prompt = (img_tokens + "\n" + prompt) if prompt.strip() else img_tokens
+        prompt = (prompt + "\n\n" if prompt else "") + "请描述这张图片\n\n" + m.config.image_special_token * m.config.image_token_len
     return audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_thread, asr_result
 
 
