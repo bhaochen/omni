@@ -1,25 +1,24 @@
 import numpy as np
+import torch
 
 
 class SileroVAD:
-    def __init__(self, path):
-        import onnxruntime as ort
-        opts = ort.SessionOptions()
-        opts.inter_op_num_threads = opts.intra_op_num_threads = 1
-        opts.log_severity_level = 4
-        self.session = ort.InferenceSession(path, providers=["CPUExecutionProvider"], sess_options=opts)
-        self.h, self.c = np.zeros((2, 1, 64), dtype=np.float32), np.zeros((2, 1, 64), dtype=np.float32)
+    def __init__(self, path=None):
+        from silero_vad import load_silero_vad
+        self.vad = load_silero_vad(onnx=True)
 
     def reset(self):
-        self.h[:], self.c[:] = 0, 0
+        self.vad.reset_states()
 
     def __call__(self, chunk, sr=16000):
-        out, self.h, self.c = self.session.run(None, {"input": chunk.reshape(1, -1).astype(np.float32), "h": self.h, "c": self.c, "sr": np.array(sr, dtype="int64")})
-        return float(out[0][0])
+        if chunk.shape[-1] not in (256, 512):
+            return 0.0
+        t = torch.from_numpy(chunk.reshape(1, -1).astype(np.float32))
+        return float(self.vad(t, sr))
 
 
 class RealtimeSession:
-    def __init__(self, vad_path, sr=16000, threshold=0.8, min_speech_ms=128, min_silence_ms=800):
+    def __init__(self, vad_path, sr=16000, threshold=0.5, min_speech_ms=128, min_silence_ms=800):
         self.vad, self.sr, self.threshold = SileroVAD(vad_path), sr, threshold
         self.min_speech, self.min_silence = int(sr * min_speech_ms / 1000), int(sr * min_silence_ms / 1000)
         self.reset()
@@ -29,7 +28,7 @@ class RealtimeSession:
         self.buffer, self.ring, self.speaking, self.generating, self.interrupt = [], [], False, False, False
         self.speech_samples = self.silence_samples = self.tail_silence = 0
 
-    def push_chunk(self, chunk, W=1024):
+    def push_chunk(self, chunk, W=512):
         for i in range(0, max(len(chunk), 1), W):
             w = chunk[i:i + W]
             if len(w) < W:

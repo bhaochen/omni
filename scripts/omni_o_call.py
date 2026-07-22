@@ -1,36 +1,21 @@
-import argparse, os, sys, json, time, math, torch, threading, queue, base64, io, logging, contextlib
+import argparse, os, sys, json, time, math, torch, threading, queue, base64, io, logging, contextlib, warnings
 import numpy as np
 from PIL import Image
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from models import VAM
-from serve.realtime import RealtimeSession
-from utils import log_model_params
+warnings.filterwarnings('ignore')
 logging.getLogger().setLevel(logging.ERROR)
 
-M = {}  # model / tokenizer / device / mimi / asr / cfg
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from models.vam import VAM, VAMConfig
+from serve.realtime import RealtimeSession
+
+M = {}
 V = {}  # voice_name -> {ref_codes, spk_emb}
-V_builtin, V_unseen, V_manual = [], [], []
 MODEL_LOCK = threading.Lock()
+VOICES_BUILTIN, VOICES_UNSEEN, VOICES_MANUAL = [], [], []
 SAMPLES_PER_FRAME = 1920
 REF_FRAMES = 300
-CLONE_VOICE = 'voice_clone'
-CLONE_FILE = 'voice_clone.pt'
 
-# -------- helpers --------
 def sse(d): return f"data: {json.dumps(d)}\n\n"
-
-def scan_hf_models(base_dir):
-    models = {}
-    base_dir = os.path.abspath(base_dir)
-    for d in sorted(os.listdir(base_dir), reverse=True):
-        full_path = os.path.join(base_dir, d)
-        if not os.path.isdir(full_path) or d.startswith('.') or d.startswith('_'):
-            continue
-        files = set(os.listdir(full_path))
-        has_model = bool(files & {'pytorch_model.bin', 'model.safetensors', 'pytorch_model.bin.index.json', 'model.safetensors.index.json'})
-        if has_model:
-            models[d] = full_path
-    return models
 
 def asr_run(samples):
     from funasr.utils.postprocess_utils import rich_transcription_postprocess
@@ -38,23 +23,23 @@ def asr_run(samples):
     return rich_transcription_postprocess(r[0]['text']).strip() if r else ''
 
 def prep_audio(samples):
-    m = M['model']
+    m, dev = M['model'], M['device']
     proc = m.audio_processor(samples, sampling_rate=16000, return_tensors="pt", return_attention_mask=True)
-    mel = proc.input_features.squeeze(0).unsqueeze(0).to(M['device'])
+    mel = proc.input_features.squeeze(0).unsqueeze(0).to(dev)
     vlen = proc.attention_mask.sum().item()
-    prompt = m.config.audio_special_token * (vlen or 1)
-    return mel, torch.tensor([vlen], device=M['device']), prompt
+    return mel, torch.tensor([vlen], device=dev), m.config.audio_special_token * (vlen or 1)
 
 def prep_image(b64):
     img = Image.open(io.BytesIO(base64.b64decode(b64))).convert('RGB')
     return {k: v.to(M['device']) for k, v in M['model'].vision_processor(images=img, return_tensors="pt").items()}
 
 def build_ids(prompt, history):
-    tok, dev, n = M['tokenizer'], M['device'], M['cfg'].max_history_turns
-    hist = history[-n:] if n > 0 else []
+    tok, dev = M['tokenizer'], M['device']
+    cfg = M['cfg']
+    hist = history[-cfg.max_history_turns:] if cfg.max_history_turns > 0 else []
     msgs = hist + [{"role": "user", "content": prompt}]
     t = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-    return torch.tensor(tok(t).data['input_ids'], dtype=torch.long, device=dev)[None, ...]
+    return torch.tensor(tok(t)['input_ids'], dtype=torch.long, device=dev)[None, ...]
 
 def _mimi_decode(frames):
     codes = [f for f in frames if f and len(f) == 8]
@@ -73,7 +58,6 @@ def pcm_bytes(frames, ov):
     return (au * 32767).astype('int16').tobytes()
 
 def stream_pcm(frames, flush=False):
-    """yield (pcm_bytes,) on chunk boundaries or on final flush."""
     if not M['mimi']: return
     cf, ov_max, n = M['cfg'].audio_chunk_frames, M['cfg'].audio_overlap, len(frames)
     if not flush and n >= cf and n % cf == 0:
@@ -87,6 +71,14 @@ def stream_pcm(frames, flush=False):
             p = pcm_bytes(frames[-(rem + ov):], ov)
             if p: yield p
 
+def register_voice(name, value, group='manual'):
+    V[name] = value
+    groups = {'builtin': VOICES_BUILTIN, 'unseen': VOICES_UNSEEN, 'manual': VOICES_MANUAL}
+    dst = groups[group]
+    if name not in dst: dst.append(name)
+    for k, lst in groups.items():
+        if k != group and name in lst: lst.remove(name)
+
 def voice_args(name):
     if name and name != 'default' and name in V:
         v = V[name]
@@ -96,126 +88,18 @@ def voice_args(name):
         return {'ref_codes': rc, 'spk_emb': se}
     return {}
 
-def register_voice(name, value, group='manual'):
-    V[name] = value
-    groups = {'builtin': V_builtin, 'unseen': V_unseen, 'manual': V_manual}
-    dst = groups[group]
-    if name not in dst:
-        dst.append(name)
-    for k, lst in groups.items():
-        if k != group and name in lst:
-            lst.remove(name)
-
-def clone_voice_path():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker', CLONE_FILE)
-
-def delete_manual_voice(name):
-    if name not in V_manual:
-        raise RuntimeError('只能删除手动克隆的音色')
-    out_path = clone_voice_path()
-    saved = torch.load(out_path, map_location='cpu') if os.path.exists(out_path) else {}
-    if name in saved:
-        saved.pop(name)
-        torch.save(saved, out_path)
-    V.pop(name, None)
-    if name in V_manual:
-        V_manual.remove(name)
-
-def normalize_voice_name(name):
-    name = ' '.join(str(name or '').split())
-    if not name:
-        name = CLONE_VOICE
-    if len(name) > 24:
-        raise RuntimeError('音色名太长，建议控制在 24 个字以内')
-    if name.lower() == 'default':
-        raise RuntimeError('default 是保留名称，请换一个')
-    if name in V_builtin or name in V_unseen:
-        raise RuntimeError('该名称已被现有音色占用，请换一个')
-    return name
-
-def validate_clone_audio(w16):
-    if w16.numel() < int(16000 * 1.8):
-        raise RuntimeError('录音太短，请把整句话读完')
-    peak = w16.abs().max().item()
-    frame, hop = 800, 400
-    if w16.numel() >= frame:
-        rms = w16.unfold(0, frame, hop).pow(2).mean(dim=1).sqrt().cpu().numpy()
-    else:
-        rms = np.array([w16.pow(2).mean().sqrt().item()])
-    hi = float(np.quantile(rms, 0.95))
-    lo = float(np.quantile(rms, 0.2))
-    if hi < 0.008:
-        raise RuntimeError('录音太轻，请靠近麦克风一点')
-    if hi > 0 and lo / hi > 0.45:
-        raise RuntimeError('环境噪声太大，请换安静一点的环境')
-    if peak > 0.995:
-        raise RuntimeError('录音有爆音，请离麦克风远一点')
-
-def build_clone_voice(audio_b64):
-    if M.get('mimi') is None or M.get('campplus') is None or M.get('mel_fn') is None:
-        raise RuntimeError('Mimi 或 CAM++ 未加载')
-    from pydub import AudioSegment
-    seg = AudioSegment.from_file(io.BytesIO(base64.b64decode(audio_b64))).set_channels(1).set_sample_width(2)
-    if len(seg) < 1000:
-        raise RuntimeError('录音太短，至少读 1 秒')
-    try:
-        seg = seg.speedup(playback_speed=1.5, chunk_size=150, crossfade=25)
-    except Exception:
-        seg = seg.speedup(playback_speed=1.5)
-    seg24 = seg.set_frame_rate(24000)
-    seg16 = seg.set_frame_rate(16000)
-    w24 = torch.tensor(np.frombuffer(seg24.raw_data, dtype=np.int16).astype(np.float32) / 32768.0)
-    w16 = torch.tensor(np.frombuffer(seg16.raw_data, dtype=np.int16).astype(np.float32) / 32768.0)
-    validate_clone_audio(w16)
-    mimi_dev = next(M['mimi'].parameters()).device
-    mimi_dtype = torch.float16 if mimi_dev.type != 'cpu' else torch.float32
-    with torch.inference_mode():
-        t = w24.unsqueeze(0).unsqueeze(0).to(device=mimi_dev, dtype=mimi_dtype)
-        codes = M['mimi'].encode(t).audio_codes
-        nf = math.ceil(w24.shape[-1] / SAMPLES_PER_FRAME)
-        ref_codes = codes[0, :8, :nf].cpu()[:, :min(nf, REF_FRAMES)]
-    with torch.no_grad():
-        mel = M['mel_fn'](w16.unsqueeze(0).to(M['device']))
-        feat = mel.clamp(min=1e-10).log().transpose(1, 2)
-        feat = feat - feat.mean(dim=1, keepdim=True)
-        spk_emb = M['campplus'](feat).squeeze(0).cpu()
-    return {'ref_codes': ref_codes, 'spk_emb': spk_emb}
-
 def run_generate(x, audio_inputs, audio_lens, pixel_values, **kw):
     with MODEL_LOCK, torch.no_grad():
         yield from M['model'].generate(
             x, M['tokenizer'].eos_token_id, stream=True, return_audio_codes=True,
             audio_inputs=audio_inputs, audio_lens=audio_lens, pixel_values=pixel_values, **kw)
 
-def load_main_model(model_path, model_name):
-    with MODEL_LOCK:
-        [sys.modules.pop(k) for k in list(sys.modules) if 'transformers_modules' in k]
-        M.pop('model', None); M.pop('tokenizer', None)
-        if torch.cuda.is_available(): torch.cuda.empty_cache()
-        tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-        m = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
-        vision_encoder, vision_processor = VAM.load_vision('../model/siglip2-base-p32-256-ve')
-        audio_encoder, audio_processor = VAM.load_sensevoice('../model/SenseVoiceSmall')
-        object.__setattr__(m, 'vision_encoder', vision_encoder)
-        object.__setattr__(m, 'vision_processor', vision_processor)
-        object.__setattr__(m, 'audio_encoder', audio_encoder)
-        object.__setattr__(m, 'audio_processor', audio_processor)
-        m = m.half().eval().to(M['device'])
-        if m.audio_encoder: m.audio_encoder.to(M['device'])
-        if m.vision_encoder: m.vision_encoder.to(M['device'])
-        M['tokenizer'], M['model'], M['model_name'] = tok, m, model_name
-        params = sum(p.numel() for p in m.parameters()) / 1e6
-        print(f'Loaded model: {model_name} ({params:.2f}M)')
-        return round(params, 2)
-
 def prepare_turn(text, samples, image_b64, do_asr_for_image):
-    """返回 (audio_inputs, audio_lens, pixel_values, prompt_for_model, user_text_for_history, asr_thread, asr_result)"""
     audio_inputs = audio_lens = pixel_values = None
     prompt = text or ''
     user_text = text or ''
     asr_thread, asr_result = None, [None]
     if samples is not None:
-        from pydub import AudioSegment
         if image_b64 and do_asr_for_image:
             user_text = asr_run(samples)
             prompt = user_text
@@ -232,7 +116,6 @@ def prepare_turn(text, samples, image_b64, do_asr_for_image):
     return audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_thread, asr_result
 
 
-# -------- web app (lazy: requires flask/flask_sock at runtime) --------
 def init_web_app():
     from flask import Flask, request, Response, send_from_directory
     from flask_cors import CORS
@@ -249,51 +132,11 @@ def init_web_app():
 
     @app.route('/voices')
     def get_voices():
-        return json.dumps({'builtin': sorted(V_builtin), 'unseen': sorted(V_unseen), 'manual': sorted(V_manual)})
+        return json.dumps({'builtin': sorted(VOICES_BUILTIN), 'unseen': sorted(VOICES_UNSEEN), 'manual': sorted(VOICES_MANUAL)})
 
     @app.route('/models')
     def get_models():
-        return json.dumps({'models': list(M.get('models', {}).keys()), 'current': M.get('model_name')})
-
-    @app.route('/switch_model', methods=['POST'])
-    def switch_model():
-        name = (request.json or {}).get('name')
-        if name not in M.get('models', {}):
-            return Response(json.dumps({'ok': False, 'error': 'unknown model'}), status=400, mimetype='application/json')
-        try:
-            params = load_main_model(M['models'][name], name)
-            return Response(json.dumps({'ok': True, 'model': name, 'params': params}), mimetype='application/json')
-        except Exception as e:
-            return Response(json.dumps({'ok': False, 'error': str(e)}), status=500, mimetype='application/json')
-
-    @app.route('/clone_voice', methods=['POST'])
-    def clone_voice():
-        d = request.json or {}
-        if not d.get('audio'):
-            return Response(json.dumps({'ok': False, 'error': 'missing audio'}), status=400, mimetype='application/json')
-        try:
-            name = normalize_voice_name(d.get('name'))
-            value = build_clone_voice(d['audio'])
-            out_path = clone_voice_path()
-            saved = torch.load(out_path, map_location='cpu') if os.path.exists(out_path) else {}
-            saved[name] = value
-            torch.save(saved, out_path)
-            register_voice(name, value, group='manual')
-            return Response(json.dumps({'ok': True, 'voice': name, 'path': './model/speaker/' + CLONE_FILE}), mimetype='application/json')
-        except Exception as e:
-            return Response(json.dumps({'ok': False, 'error': str(e)}), status=500, mimetype='application/json')
-
-    @app.route('/delete_voice', methods=['POST'])
-    def delete_voice():
-        d = request.json or {}
-        name = ' '.join(str(d.get('name') or '').split())
-        if not name:
-            return Response(json.dumps({'ok': False, 'error': 'missing name'}), status=400, mimetype='application/json')
-        try:
-            delete_manual_voice(name)
-            return Response(json.dumps({'ok': True, 'voice': name}), mimetype='application/json')
-        except Exception as e:
-            return Response(json.dumps({'ok': False, 'error': str(e)}), status=500, mimetype='application/json')
+        return json.dumps({'models': [M.get('model_name', 'omni-o')], 'current': M.get('model_name', 'omni-o')})
 
     @app.route('/chat', methods=['POST'])
     def chat():
@@ -301,6 +144,7 @@ def init_web_app():
         history = d.get('history', [])
         samples = None
         if d.get('audio'):
+            from pydub import AudioSegment
             seg = AudioSegment.from_file(io.BytesIO(base64.b64decode(d['audio']))).set_frame_rate(16000).set_channels(1).set_sample_width(2)
             samples = np.frombuffer(seg.raw_data, dtype=np.int16).astype(np.float32) / 32768.0
         va = voice_args(d.get('voice', 'default'))
@@ -348,7 +192,6 @@ def init_web_app():
                 else:
                     yield sse({'type': 'user_prompt', 'content': prompt})
             yield sse({'type': 'done'})
-
         return Response(gen(), mimetype='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
     @sock.route('/ws/realtime')
@@ -439,74 +282,132 @@ def init_web_app():
                 session.generating = False; session.interrupt = False
         finally:
             alive[0] = False
-
     return app
 
 
 def init_model(args):
-    M['cfg'] = args; M['device'] = args.device
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    M['cfg'] = args
+    M['device'] = args.device
+
     with contextlib.redirect_stdout(io.StringIO()):
         from funasr import AutoModel
-        from funasr.utils.postprocess_utils import rich_transcription_postprocess
-        M['asr'] = AutoModel(model='../model/SenseVoiceSmall', trust_remote_code=True, device=args.device, disable_update=True)
-    M['models'] = scan_hf_models(args.load_from)
-    if not M['models']:
-        raise RuntimeError(f"未在 {os.path.abspath(args.load_from)} 找到 transformers 模型")
-    model_name = next(iter(M['models']))
-    load_main_model(M['models'][model_name], model_name)
+        M['asr'] = AutoModel(model=os.path.join(root, args.sensevoice_dir), trust_remote_code=True, device=args.device, disable_update=True)
+
+    config = VAMConfig(
+        hidden_size=args.hidden_size,
+        num_hidden_layers=args.num_hidden_layers,
+        num_attention_heads=args.hidden_size // 96,
+        num_key_value_heads=args.hidden_size // 192,
+        use_moe=args.use_moe,
+    )
+    ckpt_dir = os.path.join(root, args.load_from)
+    weight = args.weight
+    if not weight.endswith('.pth'):
+        if args.use_moe and not weight.endswith('_moe'):
+            weight = f'{weight}_moe.pth'
+        else:
+            weight = f'{weight}.pth'
+    ckpt_path = os.path.join(ckpt_dir, weight)
+
+    model = VAM(config,
+                audio_encoder_path=os.path.join(root, args.sensevoice_dir),
+                vision_model_path=os.path.join(root, args.siglip_dir))
+    state = torch.load(ckpt_path, map_location='cpu', weights_only=True)
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if missing:
+        print(f'  Missing keys (expected for encoders): {len(missing)}')
+    if unexpected:
+        print(f'  Unexpected keys: {len(unexpected)}')
+    if model.audio_encoder is not None:
+        model.audio_encoder.to(args.device)
+    if model.vision_encoder is not None:
+        model.vision_encoder.to(args.device)
+    M['model'] = model.half().eval().to(args.device)
+
+    tok_dir = os.path.join(root, args.tokenizer_dir)
+    from transformers import AutoTokenizer
+    M['tokenizer'] = AutoTokenizer.from_pretrained(tok_dir)
+
+    M['model_name'] = args.weight
+    params = sum(p.numel() for p in model.parameters()) / 1e6
+    print(f'Loaded omni-o ({args.weight}): {params:.2f}M')
+
     try:
-        import torchaudio
         from transformers import MimiModel
-        M['mimi'] = MimiModel.from_pretrained('../model/mimi').eval().to(args.device)
-        if args.device != 'cpu': M['mimi'] = M['mimi'].half()
-        print('Mimi model loaded')
-    except Exception:
+        mimi_path = os.path.join(root, args.mimi_dir)
+        M['mimi'] = MimiModel.from_pretrained(mimi_path).eval().to(args.device)
+        if args.device != 'cpu':
+            M['mimi'] = M['mimi'].half()
+        print('Mimi loaded')
+    except Exception as e:
         M['mimi'] = None
+        print(f'Mimi load failed: {e}')
+
     try:
         from modelscope.models.audio.sv.DTDNN import CAMPPlus
+        import torchaudio
         M['campplus'] = CAMPPlus(feat_dim=80, embedding_size=192, growth_rate=32, bn_size=4,
                                  init_channels=128, config_str='batchnorm-relu', memory_efficient=True)
-        sd = torch.load('../model/campplus/campplus_cn_common.pt', map_location='cpu')
+        camp_path = os.path.join(root, 'checkpoint/campplus/campplus_cn_common.pt')
+        sd = torch.load(camp_path, map_location='cpu')
         M['campplus'].load_state_dict({k: v.float() for k, v in sd.items()})
         M['campplus'] = M['campplus'].eval().to(args.device)
-        import torchaudio
         M['mel_fn'] = torchaudio.transforms.MelSpectrogram(
             sample_rate=16000, n_fft=512, win_length=400, hop_length=160,
             n_mels=80, f_min=20, f_max=7600, norm='slaney', mel_scale='slaney',
         ).to(args.device)
         print('CAM++ loaded')
     except Exception as e:
-        M['campplus'], M['mel_fn'] = None, None
-        print(f'CAM++ load failed: {e}')
-    M['vad_path'] = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'checkpoint', 'vad', 'silero_vad.onnx')
+        M['campplus'] = M['mel_fn'] = None
+        print(f'CAM++ load failed (voice clone will be unavailable): {e}')
+
+    M['vad_path'] = os.path.join(root, args.vad_dir, 'silero_vad.onnx')
+
     spk_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker')
-    for fn, group in [('voices.pt', 'builtin'), ('voices_unseen.pt', 'unseen'), (CLONE_FILE, 'manual')]:
+    for fn, group in [('voices.pt', 'builtin'), ('voices_unseen.pt', 'unseen')]:
         fp = os.path.join(spk_dir, fn)
         if os.path.exists(fp):
-            for speaker, v in torch.load(fp, map_location=args.device).items():
-                if speaker not in V or fn == CLONE_FILE:
+            for speaker, v in torch.load(fp, map_location='cpu').items():
+                if speaker not in V:
                     register_voice(speaker, v, group=group)
-    if V: print(f'Loaded {len(V)} voices: builtin={sorted(V_builtin)}, unseen={sorted(V_unseen)}, manual={sorted(V_manual)}')
-    log_model_params(M['model'])
+    if V: print(f'Loaded {len(V)} voices')
+
     print('Warmup...')
     with torch.no_grad():
         ids = torch.tensor([[1, 2, 3]], device=args.device)
         au = torch.full((1, 8, 3), 2049, dtype=torch.long, device=args.device)
         M['model'].forward(torch.cat((au, ids.unsqueeze(1)), dim=1))
-        if M['model'].audio_encoder: M['model'].audio_encoder(torch.zeros(1, 100, 560, device=args.device), torch.tensor([100], device=args.device))
-        if M['mimi']: M['mimi'].decode(torch.zeros(1, 8, 1, dtype=torch.long, device=args.device))
-    print('Warmup done!')
+        if M['model'].audio_encoder is not None:
+            try:
+                M['model'].audio_encoder.model(torch.zeros(1, 100, 560, device=args.device), torch.tensor([100], device=args.device))
+            except Exception:
+                pass
+        if M['mimi']:
+            M['mimi'].decode(torch.zeros(1, 8, 1, dtype=torch.long, device=args.device))
+    print('Warmup done! Ready.')
 
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser()
-    p.add_argument('--load_from', default='./', help='模型权重搜索目录；目录下可放多个 HF 格式模型，WebUI 会自动扫描并允许切换。')
-    p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', help='推理设备；CUDA 可用时默认 cuda。显存不足或排查环境问题时可改为 cpu。')
-    p.add_argument('--port', default=7860, type=int, help='WebUI 服务端口；端口被占用或需要同时启动多个实例时调整。')
-    p.add_argument('--audio_chunk_frames', default=4, type=int, help='流式播放每次解码的 Mimi frame 数；默认 4 约 320ms。WebUI 播放卡顿时可调大到 8/12，低延迟优先时保持 4。')
-    p.add_argument('--audio_overlap', default=2, type=int, help='分块 Mimi 解码的重叠帧数；默认 2 用于缓解块边界断裂。一般不需要调整，边界杂音明显时可适当增大。')
-    p.add_argument('--max_history_turns', default=0, type=int, help='对话历史轮数；默认 0 不带历史以降低延迟和显存。需要多轮上下文时调大，但会增加 prefill 成本。')
+    p = argparse.ArgumentParser(description='Omni-O Real-time Voice Call')
+    p.add_argument('--load_from', default='checkpoint/omni-o', help='模型权重目录')
+    p.add_argument('--weight', default='omni-o', help='权重文件名（不含.pth后缀）')
+    p.add_argument('--tokenizer_dir', default='checkpoint/omni/native_hf', help='tokenizer目录')
+    p.add_argument('--sensevoice_dir', default='checkpoint/sensevoice', help='SenseVoice ASR目录')
+    p.add_argument('--siglip_dir', default='checkpoint/siglip', help='SigLIP视觉编码器目录')
+    p.add_argument('--mimi_dir', default='checkpoint/mimi', help='Mimi解码器目录')
+    p.add_argument('--vad_dir', default='checkpoint/vad', help='VAD模型目录')
+    p.add_argument('--hidden_size', default=768, type=int)
+    p.add_argument('--num_hidden_layers', default=8, type=int)
+    p.add_argument('--use_moe', default=0, type=int, choices=[0, 1])
+    p.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
+    p.add_argument('--port', default=7860, type=int)
+    p.add_argument('--audio_chunk_frames', default=4, type=int)
+    p.add_argument('--audio_overlap', default=2, type=int)
+    p.add_argument('--max_history_turns', default=0, type=int)
     args = p.parse_args()
+
     init_model(args)
     app = init_web_app()
+    print(f'Omni-O Call server started at http://0.0.0.0:{args.port}/')
     app.run(host='0.0.0.0', port=args.port, threaded=True)
