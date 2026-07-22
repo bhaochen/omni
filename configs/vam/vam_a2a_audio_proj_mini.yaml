@@ -1,11 +1,11 @@
-# VAM SFT 快速验证配置（Stage 1: T2A）
-# 参考 minimind-o mini pipeline: mode=all, from_weight=llm, lr=5e-4, max_seq_len=512
+# VAM SFT 快速验证配置（Stage 2: A2A, mode=audio_proj）
+# 参考 minimind-o mini pipeline: mode=audio_proj, from_weight=sft_omni, lr=5e-4, max_seq_len=640
 model:
   hidden_size: 768
   num_hidden_layers: 8
   use_moe: 0
   vocab_size: 6400
-  max_seq_len: 768
+  max_seq_len: 640
   num_attention_heads: 8
   num_key_value_heads: 4
   dropout: 0.0
@@ -31,24 +31,24 @@ model:
 
 train:
   epochs: 1
-  batch_size: 4
+  batch_size: 8
   learning_rate: 5.0e-4
   accumulation_steps: 1
   grad_clip: 1.0
   dtype: bfloat16
   num_workers: 0
-  save_interval: 5000
+  save_interval: 2000
   log_interval: 50
-  from_weight: omni
-  model_dir: checkpoint/omni   # 加载 checkpoint/omni/omni.pth
+  from_weight: sft_omni
+  model_dir: checkpoint/vam_t2a_all_mini   # 加载 Stage 1 输出
   from_resume: 0
   freeze_backbone: none
-  mode: all
+  mode: audio_proj                         # 仅训练 audio_proj
   max_samples: 2000
 
 paths:
-  save_dir: checkpoint/vam_sft_mini
-  data_path: dataset/vam/sft_t2a_mini.parquet
+  save_dir: checkpoint/vam_a2a_audio_proj_mini
+  data_path: dataset/vam/sft_a2a_mini.parquet
   audio_encoder_dir: checkpoint/sensevoice
   vision_dir: checkpoint/siglip
   tokenizer_dir: checkpoint/omni/native_hf
