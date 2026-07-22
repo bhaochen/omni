@@ -13,44 +13,57 @@ warnings.filterwarnings('ignore')
 
 
 def init_model(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.load_from)
-    if 'model' in args.load_from:
-        moe_suffix = '_moe' if args.use_moe else ''
-        ckp = f'./{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
-        model = VAM(
-            VAMConfig(
-                hidden_size=args.hidden_size,
-                num_hidden_layers=args.num_hidden_layers,
-                use_moe=bool(args.use_moe)
-            ),
-            audio_encoder_path="./model/SenseVoiceSmall",
-            vision_model_path="./model/siglip2-base-p32-256-ve"
-        )
-        model.load_state_dict(torch.load(ckp, map_location=args.device), strict=False)
-    else:
-        model = AutoModelForCausalLM.from_pretrained(args.load_from, trust_remote_code=True)
-        model.audio_encoder, model.audio_processor = VAM.load_sensevoice("./model/SenseVoiceSmall")
-        model.vision_encoder, model.vision_processor = VAM.load_vision("./model/siglip2-base-p32-256-ve")
+    ckpt_dir = args.load_from
+    # check for checkpoint/omni-o/omni-o.pth style paths
+    weight_name = args.weight
+    if not weight_name.endswith('.pth'):
+        if args.use_moe and not weight_name.endswith('_moe'):
+            weight_name = f'{weight_name}_moe.pth'
+        else:
+            weight_name = f'{weight_name}.pth'
+    ckp = os.path.join(ckpt_dir, weight_name)
+
+    config = VAMConfig(
+        hidden_size=args.hidden_size,
+        num_hidden_layers=args.num_hidden_layers,
+        num_attention_heads=args.hidden_size // 96,
+        num_key_value_heads=args.hidden_size // 192,
+        use_moe=bool(args.use_moe)
+    )
+    model = VAM(config, audio_encoder_path=args.sensevoice_dir, vision_model_path=args.siglip_dir)
+    state = torch.load(ckp, map_location=args.device, weights_only=True)
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if missing:
+        print(f'  Missing keys (expected for encoders): {len(missing)}')
+    if unexpected:
+        print(f'  Unexpected keys: {len(unexpected)}')
+
     log_model_params(model)
-    if model.audio_encoder is not None: model.audio_encoder.to(args.device)
-    if model.vision_encoder is not None: model.vision_encoder.to(args.device)
+    if model.audio_encoder is not None and hasattr(model.audio_encoder, 'to'):
+        model.audio_encoder.to(args.device)
+    if model.vision_encoder is not None and hasattr(model.vision_encoder, 'to'):
+        model.vision_encoder.to(args.device)
     from transformers import MimiModel
-    model.mimi_model = MimiModel.from_pretrained("./model/mimi").eval()
+    model.mimi_model = MimiModel.from_pretrained(args.mimi_dir).eval()
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_dir)
     return model.half().eval().to(args.device), tokenizer
 
 
 def eval_sample(model, tokenizer, args, idx, prompt, audio_inputs, output_name, pixel_values=None, history=None, audio_lens=None, ref_codes=None, spk_emb=None):
     import soundfile as sf
-    from pydub import AudioSegment
+    try:
+        from pydub import AudioSegment
+    except ImportError:
+        AudioSegment = None
     messages = (history or []) + [{"role": "user", "content": prompt}]
-    inputs_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, open_thinking=bool(args.open_thinking))
-    x = torch.tensor(tokenizer(inputs_text).data['input_ids'], dtype=torch.long, device=args.device)[None, ...]
+    inputs_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    x = torch.tensor(tokenizer(inputs_text)['input_ids'], dtype=torch.long, device=args.device)[None, ...]
 
     audio_frames = []
     with torch.no_grad():
         res_y = model.generate(x, tokenizer.eos_token_id, max_new_tokens=args.max_new_tokens,
                                temperature=args.temperature, top_p=args.top_p, stream=True,
-                               return_audio_codes=True, open_thinking=bool(args.open_thinking),
+                               return_audio_codes=True,
                                audio_inputs=audio_inputs, audio_lens=audio_lens, pixel_values=pixel_values,
                                ref_codes=ref_codes, spk_emb=spk_emb)
         print('📒 [Thinker]: ', end='', flush=True)
@@ -79,8 +92,11 @@ def eval_sample(model, tokenizer, args, idx, prompt, audio_inputs, output_name, 
                     output_path = os.path.join(args.output_dir, output_name)
                     wav_path = output_path.rsplit('.', 1)[0] + '.wav'
                     sf.write(wav_path, audio.squeeze().float().cpu().numpy(), 24000)
-                    AudioSegment.from_wav(wav_path).export(output_path, format='mp3', bitrate='64k')
-                    os.remove(wav_path)
+                    if AudioSegment is not None:
+                        AudioSegment.from_wav(wav_path).export(output_path, format='mp3', bitrate='64k')
+                        os.remove(wav_path)
+                    else:
+                        print(f'pydub not installed, keeping .wav: {wav_path}')
                     print(f'| Audio decoded to: {output_path}')
                 except Exception as e:
                     print(f'⚠️  保存音频失败: {str(e)}')
@@ -89,10 +105,13 @@ def eval_sample(model, tokenizer, args, idx, prompt, audio_inputs, output_name, 
 
 
 def main():
-    parser = argparse.ArgumentParser(description="MiniMind-O Chat")
-    parser.add_argument('--load_from', default='model', type=str, help="模型加载路径（model=原生torch权重）")
-    parser.add_argument('--save_dir', default='out', type=str, help="模型权重目录")
-    parser.add_argument('--weight', default='sft_omni', type=str, help="权重名称前缀")
+    parser = argparse.ArgumentParser(description="Omni-O Chat")
+    parser.add_argument('--load_from', default='checkpoint/omni-o', type=str, help="模型权重目录（包含omni-o.pth）")
+    parser.add_argument('--weight', default='omni-o', type=str, help="权重文件名（不含.pth后缀）")
+    parser.add_argument('--tokenizer_dir', default='checkpoint/omni/native_hf', type=str, help="tokenizer目录")
+    parser.add_argument('--sensevoice_dir', default='checkpoint/sensevoice', type=str, help="SenseVoice目录")
+    parser.add_argument('--siglip_dir', default='checkpoint/siglip', type=str, help="SigLIP目录")
+    parser.add_argument('--mimi_dir', default='checkpoint/mimi', type=str, help="Mimi目录")
     parser.add_argument('--hidden_size', default=768, type=int, help="隐藏层维度")
     parser.add_argument('--num_hidden_layers', default=8, type=int, help="隐藏层数量")
     parser.add_argument('--use_moe', default=0, type=int, choices=[0, 1], help="是否使用MoE架构")
