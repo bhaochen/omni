@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Omni-O Voice Call</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:#1a1a1e;color:#e8e8ed;font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;overflow:hidden}
+.app{max-width:800px;width:100%;display:flex;flex-direction:column;padding:16px 20px;height:100vh}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:0 0 10px;flex-shrink:0;gap:8px}
+.top h1{font-size:1.05rem;font-weight:600;color:#fff}
+.top .sub{font-size:.68rem;color:#888}
+.top-right{display:flex;gap:6px;align-items:center}
+.btn{padding:5px 10px;font-size:.72rem;cursor:pointer;background:#2a2a30;border:1px solid #444;color:#e8e8ed;border-radius:4px;font-family:inherit}
+.btn:hover:not(:disabled){background:#35353d;border-color:#666}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.active{background:#2a4a6a;border-color:#4a8aba}
+.btn.danger{color:#d84545;border-color:#6a3a3a}
+select{font-size:.72rem;background:#2a2a30;border:1px solid #444;color:#e8e8ed;padding:4px 6px;border-radius:4px;outline:none;font-family:inherit}
+select:focus{border-color:#666}
+
+/* chat area */
+.chat{flex:1;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;gap:4px;min-height:0}
+.msg{display:flex;gap:8px;padding:8px 10px;border-radius:6px;max-width:85%;animation:fadeIn .2s}
+.msg.user{align-self:flex-end;flex-direction:row-reverse;background:#2a4a6a}
+.msg.assistant{background:#2a2a30}
+.msg .role{font-size:.65rem;color:#888;flex-shrink:0;min-width:40px;padding-top:2px}
+.msg .content{font-size:.85rem;line-height:1.5;word-break:break-word}
+.msg .content.typing::after{content:'|';animation:blink .8s infinite}
+@keyframes blink{50%{opacity:0}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* input area */
+.input-bar{display:flex;gap:6px;padding:8px 0 4px;flex-shrink:0;align-items:center}
+.input-bar input{flex:1;padding:8px 10px;background:#2a2a30;border:1px solid #444;border-radius:4px;color:#e8e8ed;font-size:.82rem;outline:none;font-family:inherit}
+.input-bar input:focus{border-color:#666}
+.tab-bar{display:flex;gap:4px;padding:4px 0;flex-shrink:0}
+.tab-btn{padding:4px 14px;font-size:.72rem;cursor:pointer;background:transparent;border:none;border-bottom:2px solid transparent;color:#888;font-family:inherit}
+.tab-btn.active{color:#e8e8ed;border-bottom-color:#4a8aba}
+.tab-content{display:none}
+.tab-content.active{display:flex;flex-direction:column;flex:1;min-height:0}
+
+/* orb */
+.orb-wrap{display:flex;justify-content:center;align-items:center;padding:20px 0;flex-shrink:0}
+.orb{width:100px;height:100px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#4a6a8a,#1a2a3a);
+  transition:box-shadow .3s,transform .3s;position:relative;cursor:pointer}
+.orb.idle{box-shadow:0 0 20px #2a4a6a44}
+.orb.listening{box-shadow:0 0 40px #4a8aba88;transform:scale(1.05);animation:pulse 1.5s infinite}
+.orb.speaking{box-shadow:0 0 60px #e5b57a88;transform:scale(1.08)}
+.orb.thinking{box-shadow:0 0 30px #88888844;animation:spin 2s linear infinite}
+@keyframes pulse{0%,100%{transform:scale(1.05)}50%{transform:scale(1.12)}}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+.orb .label{position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);font-size:.65rem;color:#888;white-space:nowrap}
+.orb-info{text-align:center;font-size:.68rem;color:#666;padding:2px 0;flex-shrink:0}
+
+/* camera */
+.cam-wrap{position:relative;display:none;flex-shrink:0}
+.cam-wrap.active{display:block}
+.cam-wrap video{width:120px;height:90px;border-radius:6px;object-fit:cover;border:1px solid #444}
+.cam-wrap .cam-close{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#d84545;color:#fff;font-size:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* voice clone modal */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#00000088;display:none;align-items:center;justify-content:center;z-index:100}
+.modal-overlay.active{display:flex}
+.modal{background:#2a2a30;border:1px solid #444;border-radius:8px;padding:20px;min-width:320px;max-width:400px}
+.modal h3{margin-bottom:12px;font-size:.9rem}
+.modal p{font-size:.78rem;color:#aaa;margin-bottom:12px}
+.modal .btn-row{display:flex;gap:6px;justify-content:flex-end;margin-top:12px}
+.modal input{width:100%;padding:6px 8px;background:#1a1a1e;border:1px solid #444;border-radius:4px;color:#e8e8ed;font-size:.8rem;outline:none;margin-bottom:8px;font-family:inherit}
+.modal .rec-btn{width:100%;padding:20px;font-size:1rem;background:#2a4a6a;border:1px solid #4a8aba;border-radius:8px;color:#fff;cursor:pointer;font-family:inherit}
+.modal .rec-btn:hover{background:#3a5a7a}
+.modal .rec-btn.recording{background:#6a2a2a;border-color:#d84545;animation:pulse .8s infinite}
+
+/* audio visualizer bars */
+.viz{display:flex;justify-content:center;align-items:flex-end;gap:3px;height:40px;padding:4px 0;flex-shrink:0}
+.viz .bar{width:4px;background:#4a8aba;border-radius:2px;transition:height .08s;height:4px}
+.viz.active .bar{background:#e5b57a}
+
+/* utility */
+.hidden{display:none!important}
+.text-muted{color:#888;font-size:.72rem}
+.gap-4{display:flex;gap:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div><h1>Omni-O</h1><div class="sub">voice call · real-time</div></div>
+    <div class="top-right">
+      <button class="btn" id="camBtn" onclick="toggleCam()">📷</button>
+      <button class="btn" onclick="openCloneModal()">🎙️ Clone</button>
+      <select id="voiceSel" onchange="onVoiceChange()"></select>
+      <button class="btn" id="modeBtn" onclick="toggleMode()">📞 Call</button>
+    </div>
+  </div>
+
+  <!-- Chat Tab -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('chat',this)">Chat</button>
+    <button class="tab-btn" onclick="switchTab('call',this)">Call</button>
+  </div>
+
+  <!-- Chat tab -->
+  <div class="tab-content active" id="tabChat">
+    <div class="chat" id="chatBox"></div>
+    <div class="input-bar">
+      <input id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}">
+      <button class="btn" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+
+  <!-- Call tab -->
+  <div class="tab-content" id="tabCall">
+    <div class="chat" id="callBox"></div>
+    <div class="viz" id="viz"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
+    <div class="cam-wrap" id="camWrap">
+      <video id="camVideo" autoplay muted playsinline></video>
+      <button class="cam-close" onclick="toggleCam()">✕</button>
+    </div>
+    <div class="orb-wrap">
+      <div class="orb idle" id="orb" onclick="toggleCall()">
+        <div class="label" id="orbLabel">Start Call</div>
+      </div>
+    </div>
+    <div class="orb-info" id="orbInfo">Press the orb or click Call to start</div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="cloneModal">
+  <div class="modal">
+    <h3>Voice Clone</h3>
+    <p>Record a sentence (2-6s) to clone your voice</p>
+    <input id="cloneName" placeholder="Voice name" maxlength="24">
+    <button class="rec-btn" id="recBtn" onmousedown="startRec()" onmouseup="stopRec()" ontouchstart="startRec()" ontouchend="stopRec()">Hold to Record</button>
+    <div id="cloneStatus" class="text-muted" style="margin-top:8px"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="closeCloneModal()">Cancel</button>
+      <button class="btn" id="cloneDelBtn" onclick="deleteVoice()" style="display:none">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ======= State =======
+let mode = 'chat' // chat | call
+let ws = null
+let mic = null, rtc = null, proc = null
+let playing = []
+let userBuf = []
+let spk = false
+let accPcm = null
+let nextT = 0
+let callActive = false
+let camStream = null
+let camFrame = null
+let currentCallMsg = null
+let currentCallText = ''
+let history = []
+let voices = []
+let selectedVoice = 'default'
+let abortController = null
+
+const RT_SAMPLE_RATE = 16000
+const RT_BLOCK = 4096
+const AUDIO_SR = 24000
+
+// ======= DOM refs =======
+const $ = s => document.querySelector(s)
+const chatBox = $('#chatBox')
+const callBox = $('#callBox')
+const chatInput = $('#chatInput')
+const orb = $('#orb')
+const orbLabel = $('#orbLabel')
+const orbInfo = $('#orbInfo')
+const viz = $('#viz')
+const camVideo = $('#camVideo')
+const camWrap = $('#camWrap')
+const voiceSel = $('#voiceSel')
+
+// ======= Utility =======
+function addMsg(container, role, text, id) {
+  const el = document.createElement('div')
+  el.className = `msg ${role}`
+  if(id) el.id = id
+  el.innerHTML = `<div class="role">${role==='user'?'You':'AI'}</div><div class="content">${text||''}</div>`
+  container.appendChild(el)
+  container.scrollTop = container.scrollHeight
+  return el.querySelector('.content')
+}
+
+function fmtTime(ms) {
+  if(ms<1000) return ms.toFixed(0)+'ms'
+  return (ms/1000).toFixed(1)+'s'
+}
+
+function vizBars(active) {
+  viz.className = 'viz' + (active ? ' active' : '')
+  if(active) {
+    let bars = viz.querySelectorAll('.bar')
+    function anim(){
+      if(!viz.classList.contains('active')) return
+      bars.forEach(b => b.style.height = (2 + Math.random()*30) + 'px')
+      requestAnimationFrame(anim)
+    }
+    anim()
+  } else {
+    viz.querySelectorAll('.bar').forEach(b => b.style.height = '4px')
+  }
+}
+
+function floatToI16(f32) {
+  const i16 = new Int16Array(f32.length)
+  for(let i=0;i<f32.length;i++){
+    const v = f32[i]*32767
+    i16[i]=Math.max(-32768,Math.min(32767,v|0))
+  }
+  return i16
+}
+
+function resamplePcm(src, fromRate, toRate) {
+  if(fromRate===toRate) return src
+  const ratio = toRate/fromRate
+  const dst = new Float32Array(Math.ceil(src.length*ratio))
+  for(let i=0;i<dst.length;i++){
+    const p = i/ratio
+    const i0 = p|0, i1 = Math.min(i0+1,src.length-1)
+    const f = p-i0
+    dst[i] = src[i0]*(1-f)+src[i1]*f
+  }
+  return dst
+}
+
+// ======= Tab switching =======
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'))
+  btn.classList.add('active')
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'))
+  document.getElementById('tab'+(name==='chat'?'Chat':'Call')).classList.add('active')
+  mode = name
+  $('#modeBtn').textContent = name==='chat'?'📞 Call':'💬 Chat'
+  if(name==='call') initMic()
+}
+
+// ======= Chat mode (SSE) =======
+async function sendChat() {
+  const text = chatInput.value.trim()
+  if(!text) return
+  chatInput.value = ''
+  addMsg(chatBox, 'user', text)
+  const contentEl = addMsg(chatBox, 'assistant', '', 'chatResp')
+  contentEl.classList.add('typing')
+
+  const body = JSON.stringify({text, history, voice:selectedVoice, max_tokens:256, temperature:0.7})
+  abortController = new AbortController()
+  try {
+    const resp = await fetch('/chat', {method:'POST', body, headers:{'Content-Type':'application/json'}, signal:abortController.signal})
+    const reader = resp.body.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    let fullResp = ''
+    let audioBuf = []
+    let pcmChunks = []
+    while(true){
+      const {done,value} = await reader.read()
+      if(done) break
+      buf += dec.decode(value,{stream:true})
+      for(;;){
+        const idx = buf.indexOf('\n\n')
+        if(idx<0) break
+        const line = buf.slice(0,idx)
+        buf = buf.slice(idx+2)
+        if(!line.startsWith('data: ')) continue
+        const d = JSON.parse(line.slice(6))
+        if(d.type==='text'){
+          fullResp = d.content
+          contentEl.textContent = fullResp
+          chatBox.scrollTop = chatBox.scrollHeight
+        } else if(d.type==='user_prompt' && d.content) {
+          history.push({role:'user', content:d.content})
+        } else if(d.type==='pcm'){
+          pcmChunks.push(d)
+        } else if(d.type==='done'){
+          if(fullResp) history.push({role:'assistant', content:fullResp})
+          contentEl.classList.remove('typing')
+          // decode and play audio
+          if(pcmChunks.length){
+            let b64 = ''
+            const parts = []
+            for(const c of pcmChunks){
+              if(c.d) { b64 += c.c; parts.push(b64); b64 = '' }
+              else b64 += c.c
+            }
+            if(b64) parts.push(b64)
+            for(const p of parts){
+              try{
+                const ab = Uint8Array.from(atob(p), c=>c.charCodeAt(0)).buffer
+                playPcm(ab)
+              }catch(e){}
+            }
+          }
+        }
+      }
+    }
+  } catch(e){if(e.name!=='AbortError') throw e}
+  abortController = null
+}
+
+// ======= Call mode (WebSocket) =======
+function toggleMode() {
+  if(mode==='chat'){ switchTab('call', document.querySelectorAll('.tab-btn')[1]) }
+  else{ switchTab('chat', document.querySelectorAll('.tab-btn')[0]) }
+}
+
+async function initMic() {
+  if(mic) return
+  try{
+    mic = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})
+  }catch(e){ orbInfo.textContent = 'Mic access denied'; throw e }
+}
+
+async function toggleCall() {
+  if(!callActive) startCall()
+  else stopCall()
+}
+
+async function startCall() {
+  if(callActive) return
+  try{ await initMic() } catch(e){ return }
+  if(ws && ws.readyState===1) return
+
+  callActive = true
+  orb.className = 'orb idle'
+  orbLabel.textContent = 'Connecting...'
+  orbInfo.textContent = ''
+  currentCallText = ''
+  currentCallMsg = null
+  userBuf = []
+  spk = false
+
+  ws = new WebSocket('ws://'+location.host+'/ws/realtime')
+  ws.binaryType = 'arraybuffer'
+
+  ws.onopen = () => {
+    orbLabel.textContent = 'Listening'
+    orbInfo.textContent = 'Speak to start'
+    startAudioCapture()
+  }
+
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data)
+    if(m.type==='vad'){
+      if(m.speaking && !spk) { sendContext(); stopPcm(); spk=true }
+      if(!m.speaking && spk) spk=false
+      if(m.speaking){ orb.className='orb listening'; orbLabel.textContent='You...'; vizBars(true) }
+      else if(!currentCallText && !callFinished){ orb.className='orb idle'; orbLabel.textContent='Listening'; vizBars(false) }
+    } else if(m.type==='generating'){
+      orb.className='orb thinking'; orbLabel.textContent='Thinking'; vizBars(false)
+      if(spk){ spk=false }
+    } else if(m.type==='text'){
+      orb.className='orb speaking'; orbLabel.textContent='Speaking'; vizBars(false)
+      currentCallText += m.content
+      if(!currentCallMsg) currentCallMsg = addMsg(callBox, 'assistant', '')
+      const el = callBox.querySelector('.msg.assistant:last-child .content')
+      if(el){ el.textContent = currentCallText; callBox.scrollTop = callBox.scrollHeight }
+    } else if(m.type==='pcm'){
+      try{
+        const ab = Uint8Array.from(atob(m.data), c=>c.charCodeAt(0)).buffer
+        playPcm(ab)
+      }catch(e){}
+    } else if(m.type==='done'){
+      orb.className='orb idle'; orbLabel.textContent='Listening'
+      if(m.interrupted){ stopPcm(); orbInfo.textContent='Interrupted' }
+      if(currentCallText){
+        if(!m.interrupted) history.push({role:'assistant', content:currentCallText})
+        currentCallText = ''
+        currentCallMsg = null
+      }
+      setTimeout(()=>{ if(callActive) orbInfo.textContent='Speak to start' }, 1000)
+    }
+  }
+
+  ws.onclose = () => {
+    stopAudioCapture()
+    if(callActive){
+      callActive = false
+      orb.className='orb idle'; orbLabel.textContent='Call ended'
+      orbInfo.textContent='Press orb to restart'
+    }
+  }
+
+  ws.onerror = () => {
+    orbLabel.textContent='Error'; orbInfo.textContent='Connection failed'
+    callActive = false
+  }
+}
+
+function stopCall() {
+  callActive = false
+  if(ws) { ws.close(); ws = null }
+  stopAudioCapture()
+  stopPcm()
+  orb.className = 'orb idle'
+  orbLabel.textContent = 'Start Call'
+  orbInfo.textContent = ''
+  vizBars(false)
+}
+
+function startAudioCapture() {
+  if(proc) return
+  rtc = new AudioContext()
+  const src = rtc.createMediaStreamSource(mic)
+  proc = rtc.createScriptProcessor(4096, 1, 1)
+  let acc = new Float32Array(0)
+
+  proc.onaudioprocess = e => {
+    if(!ws || ws.readyState!==1) return
+    const rs = resamplePcm(e.inputBuffer.getChannelData(0), e.inputBuffer.sampleRate, RT_SAMPLE_RATE)
+    const merged = new Float32Array(acc.length + rs.length)
+    merged.set(acc); merged.set(rs, acc.length)
+    let off = 0
+    for(; merged.length - off >= RT_BLOCK; off += RT_BLOCK){
+      const i16 = floatToI16(merged.subarray(off, off + RT_BLOCK))
+      ws.send(i16.buffer)
+      if(spk) userBuf.push(new Int16Array(i16))
+    }
+    acc = merged.slice(off)
+  }
+  src.connect(proc)
+  proc.connect(rtc.destination)
+}
+
+function stopAudioCapture() {
+  if(proc) { proc.disconnect(); proc = null }
+  if(rtc) { rtc.close(); rtc = null }
+  accPcm = null
+}
+
+function playPcm(arrayBuffer) {
+  if(!rtc) return
+  try{
+    const f32 = new Float32Array(arrayBuffer.byteLength / 2)
+    const i16 = new Int16Array(arrayBuffer)
+    for(let i=0;i<f32.length;i++) f32[i] = i16[i] / 32767
+    const buf = rtc.createBuffer(1, f32.length, AUDIO_SR)
+    buf.getChannelData(0).set(f32)
+    const src = rtc.createBufferSource()
+    src.buffer = buf
+    src.connect(rtc.destination)
+    if(!nextT || nextT < rtc.currentTime) nextT = rtc.currentTime
+    src.start(nextT)
+    nextT += f32.length / AUDIO_SR
+    playing.push(src)
+    src.onended = () => { const i = playing.indexOf(src); if(i>=0) playing.splice(i,1) }
+  } catch(e){}
+}
+
+function stopPcm() {
+  for(const s of playing) try{ s.stop() } catch{}
+  playing = []
+  if(rtc) nextT = rtc.currentTime
+}
+
+function sendContext() {
+  if(!ws || ws.readyState!==1) return
+  const msg = {type:'context', voice:selectedVoice}
+  if(history.length) msg.history = history.slice(-8)
+  if(camFrame) msg.image = camFrame
+  ws.send(JSON.stringify(msg))
+}
+
+// ======= Camera =======
+async function toggleCam() {
+  if(camStream){
+    camStream.getTracks().forEach(t=>t.stop())
+    camStream = null
+    camWrap.classList.remove('active')
+    camFrame = null
+    $('#camBtn').classList.remove('active')
+    return
+  }
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:{width:320,height:240}})
+    camVideo.srcObject = camStream
+    camWrap.classList.add('active')
+    $('#camBtn').classList.add('active')
+    // Capture frames periodically
+    setInterval(() => {
+      if(!camStream) return
+      const c = document.createElement('canvas')
+      c.width = camVideo.videoWidth || 320
+      c.height = camVideo.videoHeight || 240
+      c.getContext('2d').drawImage(camVideo, 0, 0)
+      camFrame = c.toDataURL('image/jpeg', 0.6).split(',')[1]
+    }, 2000)
+  }catch(e){ orbInfo.textContent = 'Camera denied' }
+}
+
+// ======= Voice Clone =======
+function openCloneModal() {
+  $('#cloneModal').classList.add('active')
+  $('#cloneStatus').textContent = ''
+  $('#cloneDelBtn').style.display = 'none'
+}
+
+function closeCloneModal() {
+  $('#cloneModal').classList.remove('active')
+  if(recMediaRec) { recMediaRec.stop(); recMediaRec = null }
+}
+
+let recMediaRec = null, recChunks = []
+function startRec() {
+  recChunks = []
+  const btn = $('#recBtn')
+  btn.textContent = 'Recording...'
+  btn.classList.add('recording')
+  try{
+    const s = new MediaStream(mic.getAudioTracks())
+    recMediaRec = new MediaRecorder(s, {mimeType:'audio/webm;codecs=opus'})
+    recMediaRec.ondataavailable = e => { if(e.data.size) recChunks.push(e.data) }
+    recMediaRec.start()
+  }catch(e){ $('#cloneStatus').textContent = 'Record failed: '+e.message }
+}
+
+async function stopRec() {
+  const btn = $('#recBtn')
+  btn.textContent = 'Hold to Record'
+  btn.classList.remove('recording')
+  if(!recMediaRec) return
+  recMediaRec.stop()
+  await new Promise(r => recMediaRec.onstop = r)
+  const blob = new Blob(recChunks, {type:'audio/webm;codecs=opus'})
+  const reader = new FileReader()
+  reader.onload = async () => {
+    const b64 = reader.result.split(',')[1]
+    const name = $('#cloneName').value.trim() || 'voice_clone'
+    $('#cloneStatus').textContent = 'Cloning...'
+    try{
+      const r = await fetch('/clone_voice', {method:'POST', body:JSON.stringify({audio:b64, name}), headers:{'Content-Type':'application/json'}})
+      const d = await r.json()
+      if(d.ok){ $('#cloneStatus').textContent = 'Cloned!'; loadVoices() }
+      else $('#cloneStatus').textContent = 'Error: '+d.error
+    }catch(e){ $('#cloneStatus').textContent = 'Error: '+e.message }
+  }
+  reader.readAsDataURL(blob)
+  recMediaRec = null
+}
+
+async function deleteVoice() {
+  const name = $('#cloneName').value.trim()
+  if(!name) return
+  try{
+    await fetch('/delete_voice', {method:'POST', body:JSON.stringify({name}), headers:{'Content-Type':'application/json'}})
+    loadVoices()
+    closeCloneModal()
+  }catch(e){}
+}
+
+async function loadVoices() {
+  try{
+    const r = await fetch('/voices')
+    const d = await r.json()
+    voiceSel.innerHTML = '<option value="default">Default Voice</option>'
+    for(const g of ['builtin','unseen','manual']){
+      for(const v of (d[g]||[])){
+        const o = document.createElement('option')
+        o.value = v; o.textContent = v + (g==='manual'?' ★':'')
+        voiceSel.appendChild(o)
+      }
+    }
+  }catch(e){}
+}
+loadVoices()
+
+function onVoiceChange() { selectedVoice = voiceSel.value }
+
+// ======= Init =======
+// Add welcome message
+addMsg(chatBox, 'assistant', 'Hello! I\'m Omni-O. Type a message or switch to Call mode for real-time voice conversation.')
+</script>
+</body>
+</html>

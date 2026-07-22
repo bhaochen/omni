@@ -126,9 +126,9 @@ def init_web_app():
     sock = Sock(app)
 
     @app.route('/')
-    def index(): return send_from_directory('.', 'web_demo.html')
+    def index(): return send_from_directory('.', 'omni_o_web.html')
     @app.route('/call')
-    def call_page(): return send_from_directory('.', 'web_demo.html')
+    def call_page(): return send_from_directory('.', 'omni_o_web.html')
 
     @app.route('/voices')
     def get_voices():
