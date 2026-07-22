@@ -111,13 +111,13 @@ class VAM(LMForCausalLM):
         vision_model_path = kwargs.pop('vision_model_path', None)
         model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
         if audio_encoder_path and model.audio_encoder is None:
-            enc, proc = cls.load_sensevoice(audio_encoder_path)
+            enc = SenseVoiceAudioEncoder(audio_encoder_path)
             object.__setattr__(model, 'audio_encoder', enc)
-            object.__setattr__(model, 'audio_processor', proc)
+            object.__setattr__(model, 'audio_processor', enc.processor)
         if vision_model_path and model.vision_encoder is None:
-            enc, proc = cls.load_vision(vision_model_path)
-            object.__setattr__(model, 'vision_encoder', enc)
-            object.__setattr__(model, 'vision_processor', proc)
+            vision_enc = SiglipVisionEncoder(vision_model_path)
+            object.__setattr__(model, 'vision_encoder', vision_enc)
+            object.__setattr__(model, 'vision_processor', vision_enc.processor)
         return model
 
     @staticmethod
