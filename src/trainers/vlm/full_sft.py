@@ -12,15 +12,17 @@ from torch.utils.data import DataLoader, DistributedSampler
 from transformers import AutoTokenizer
 from models import VLM, VLMConfig
 from dataset import VLMDataset
-from utils import get_lr, Logger, is_main_process, init_distributed_mode, setup_seed, init_vlm_model, vlm_checkpoint, SkipBatchSampler, vlm_collate_fn
+from utils import get_lr, Logger, is_main_process, init_distributed_mode, setup_seed, init_vlm_model, vlm_checkpoint, SkipBatchSampler, vlm_collate_fn, apply_config, init_logger
 
 warnings.filterwarnings('ignore')
 
 
-def train_epoch(epoch, loader, iters, start_step=0, wandb=None):
+def train_epoch(epoch, loader, iters, args, model, optimizer, scaler, autocast_ctx, vlm_config, start_step=0, wandb=None, max_steps=0):
     start_time = time.time()
     last_step = start_step
     for step, (input_ids, labels, pixel_values) in enumerate(loader, start=start_step + 1):
+        if max_steps > 0 and step >= max_steps:
+            break
         input_ids = input_ids.to(args.device)
         labels = labels.to(args.device)
         pixel_values = {k: v.to(args.device) for k, v in pixel_values.items()} if isinstance(pixel_values, dict) else pixel_values.to(args.device)
@@ -106,6 +108,7 @@ def main(default_config=None):
     parser.add_argument('--weight_path', type=str, default=None, help="直接指定权重文件路径，优先级高于 from_weight（如 checkpoint/omni/omni.pth）")
     parser.add_argument('--model_dir', default=None, type=str, help="预训练权重所在目录（默认同save_dir），配合from_weight使用")
     parser.add_argument('--from_resume', default=0, type=int, choices=[0, 1], help="是否自动检测&续训（0=否，1=是）")
+    parser.add_argument('--max_steps', type=int, default=0, help="最大训练步数（0=不限制，用于控制训练时长）")
     parser.add_argument('--freeze_llm', default=1, type=int, choices=[0, 1, 2], help="冻结策略（0=完全可训练，1=冻结+解冻首尾层，2=完全冻结仅训练proj）")
     parser.add_argument("--use_compile", default=0, type=int, choices=[0, 1], help="是否使用torch.compile加速（0=否，1=是）")
     parser.add_argument("--vision_dir", type=str, default=None, help="视觉模型路径（默认 ../model/siglip2-base-p32-256-ve）")
@@ -124,6 +127,7 @@ def main(default_config=None):
     init_logger(args.save_dir, getattr(args, "save_weight", "train"))
     vlm_config = VLMConfig(**vars(args))
     ckp_data = vlm_checkpoint(vlm_config, weight=args.save_weight, save_dir='../checkpoints') if args.from_resume==1 else None
+    start_step = ckp_data.get('step', 0) if ckp_data else 0
 
     # ========== 3. 设置混合精度 ==========
     device_type = "cuda" if "cuda" in args.device else "cpu"
@@ -146,7 +150,9 @@ def main(default_config=None):
                                        vision_model_path=args.vision_dir or '../model/siglip2-base-p32-256-ve',
                                        weight_path=args.weight_path, model_dir=args.model_dir)
     preprocess = model.vision_encoder.processor
-    train_ds = VLMDataset(args.data_path, tokenizer, preprocess=preprocess, image_special_token=vlm_config.image_special_token, image_token_len=vlm_config.image_token_len, max_length=vlm_config.max_seq_len)
+    remaining_steps = max(0, args.max_steps - start_step) if args.max_steps > 0 else 0
+    max_samples = remaining_steps * args.batch_size if remaining_steps > 0 else None
+    train_ds = VLMDataset(args.data_path, tokenizer, preprocess=preprocess, image_special_token=vlm_config.image_special_token, image_token_len=vlm_config.image_token_len, max_length=vlm_config.max_seq_len, max_samples=max_samples)
     train_sampler = DistributedSampler(train_ds) if dist.is_initialized() else None
     scaler = torch.cuda.amp.GradScaler(enabled=(args.dtype == 'float16'))
     optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
@@ -177,9 +183,9 @@ def main(default_config=None):
         loader = DataLoader(train_ds, batch_sampler=batch_sampler, num_workers=args.num_workers, pin_memory=True, collate_fn=vlm_collate_fn)
         if skip > 0:
             Logger(f'Epoch [{epoch + 1}/{args.epochs}]: 跳过前{start_step}个step，从step {start_step + 1}开始')
-            train_epoch(epoch, loader, len(loader) + skip, start_step, wandb)
+            train_epoch(epoch, loader, len(loader) + skip, args, model, optimizer, scaler, autocast_ctx, vlm_config, start_step, wandb, max_steps=args.max_steps)
         else:
-            train_epoch(epoch, loader, len(loader), 0, wandb)
+            train_epoch(epoch, loader, len(loader), args, model, optimizer, scaler, autocast_ctx, vlm_config, 0, wandb, max_steps=args.max_steps)
 
     # ========== 9. 清理分布进程 ==========
     if dist.is_initialized(): dist.destroy_process_group()

@@ -10,6 +10,7 @@ from utils.training import (
     SkipBatchSampler,
     LMForRewardModel,
     apply_config,
+    init_logger,
 )
 from utils.distributed import (
     init_distributed_mode as init_distributed,
@@ -48,6 +49,7 @@ __all__ = [
     "SkipBatchSampler",
     "LMForRewardModel",
     "apply_config",
+    "init_logger",
     "is_distributed",
     "get_rank",
     "get_world_size",

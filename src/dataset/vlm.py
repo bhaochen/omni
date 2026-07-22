@@ -1,17 +1,34 @@
 import io
 import json
+import pyarrow.parquet as pq
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
-from datasets import Dataset as HFDataset
 
+from utils import Logger
 from dataset.common import VLM, pre_processing_chat, post_processing_chat
 
 
 class VLMDataset(Dataset):
-    def __init__(self, parquet_path, tokenizer, preprocess=None, max_length=512, image_special_token='<|image_pad|>', image_token_len=64):
+    def __init__(self, parquet_path, tokenizer, preprocess=None, max_length=512, image_special_token='<|image_pad|>', image_token_len=64, max_samples=None):
         super().__init__()
-        self.dataset = HFDataset.from_parquet(parquet_path)
+        pf = pq.ParquetFile(parquet_path)
+        total = pf.metadata.num_rows
+        if max_samples is not None and max_samples < total:
+            total = max_samples
+        cols = pf.metadata.schema.names
+        rows = {c: [] for c in cols}
+        loaded = 0
+        for batch in pf.iter_batches(batch_size=32768, columns=cols):
+            batch = batch.slice(0, total - loaded)
+            for c in cols:
+                rows[c].extend(batch.column(c).to_pylist())
+            loaded += batch.num_rows
+            if loaded >= total:
+                break
+        self.data = rows
+        del pf, rows
+        Logger(f'Loaded {loaded} samples from {parquet_path}')
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.preprocess = preprocess
@@ -20,7 +37,7 @@ class VLMDataset(Dataset):
         self.eos_id = tokenizer(f'{tokenizer.eos_token}\n', add_special_tokens=False).input_ids
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.data['conversations']) if 'conversations' in self.data else 0
 
     def create_chat_prompt(self, conversations):
         messages = []
@@ -54,7 +71,7 @@ class VLMDataset(Dataset):
         return labels
 
     def __getitem__(self, index: int):
-        row = self.dataset[index]
+        row = {k: v[index] for k, v in self.data.items()}
         conversations = json.loads(row['conversations']) if isinstance(row['conversations'], str) else row['conversations']
         image_bytes = row['image_bytes']
         if not isinstance(image_bytes, list): image_bytes = [image_bytes]

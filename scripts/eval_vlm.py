@@ -11,33 +11,39 @@ from utils import setup_seed, get_vlm_model_params
 warnings.filterwarnings('ignore')
 
 def init_model(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.load_from, trust_remote_code=True)
-    if 'model' in args.load_from:
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path, trust_remote_code=True)
+    if args.native:
         moe_suffix = '_moe' if args.use_moe else ''
-        ckp = f'./{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
+        ckp = f'{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
+        state = torch.load(ckp, map_location=args.device)
+        n_layers = max(int(k.split('.')[2]) for k in state if k.startswith('model.layers.')) + 1
         model = VLM(
-            VLMConfig(hidden_size=args.hidden_size, num_hidden_layers=args.num_hidden_layers, use_moe=bool(args.use_moe)),
-            vision_model_path="./model/siglip2-base-p32-256-ve"
+            VLMConfig(hidden_size=args.hidden_size, num_hidden_layers=n_layers, use_moe=bool(args.use_moe)),
+            vision_model_path=args.vision_model_dir
         )
-        state_dict = torch.load(ckp, map_location=args.device)
-        model.load_state_dict({k: v for k, v in state_dict.items() if 'mask' not in k}, strict=False)
+        model.load_state_dict({k: v for k, v in state.items() if 'mask' not in k}, strict=False)
+        processor = model.vision_encoder.processor if hasattr(model.vision_encoder, 'processor') else None
     else:
         model = AutoModelForCausalLM.from_pretrained(args.load_from, trust_remote_code=True)
-        model.vision_encoder, model.processor = VLM.get_vision_model("./model/siglip2-base-p32-256-ve")
+        hf_vision, processor = VLM.get_vision_model(args.vision_model_dir)
+        if hf_vision is not None:
+            model.vision_encoder = hf_vision
     get_vlm_model_params(model, model.config)
     model = model.eval()
     if "cuda" in args.device: model = model.half()
-    return model.to(args.device), tokenizer, model.processor
+    return model.to(args.device), tokenizer, processor
 
 
 def main():
-    parser = argparse.ArgumentParser(description="MiniMind-V Chat")
-    parser.add_argument('--load_from', default='model', type=str, help="模型加载路径（model=原生torch权重，其他路径=transformers格式）")
+    parser = argparse.ArgumentParser(description="MiniMind-V 视觉多模态推理")
+    parser.add_argument('--load_from', default='', type=str, help="模型加载路径（transformers格式，native模式不感知此参数）")
+    parser.add_argument('--tokenizer_path', default='checkpoint/omni/native_hf', type=str, help="tokenizer 路径")
+    parser.add_argument('--native', action='store_true', help="加载原生 torch checkpoint（由 save_dir/weight/hidden_size 定位）")
     parser.add_argument('--save_dir', default='checkpoint', type=str, help="模型权重目录")
     parser.add_argument('--weight', default='sft_vlm', type=str, help="权重名称前缀（pretrain_vlm, sft_vlm）")
     parser.add_argument('--hidden_size', default=768, type=int, help="隐藏层维度")
-    parser.add_argument('--num_hidden_layers', default=8, type=int, help="隐藏层数量")
     parser.add_argument('--use_moe', default=0, type=int, choices=[0, 1], help="是否使用MoE架构（0=否，1=是）")
+    parser.add_argument('--vision_model_dir', default='checkpoint/siglip', type=str, help="视觉模型目录")
     parser.add_argument('--max_new_tokens', default=512, type=int, help="最大生成长度")
     parser.add_argument('--temperature', default=0.7, type=float, help="生成温度，控制随机性（0-1，越大越随机）")
     parser.add_argument('--top_p', default=0.85, type=float, help="nucleus采样阈值（0-1）")
@@ -49,7 +55,6 @@ def main():
 
     model, tokenizer, preprocess = init_model(args)
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-    # 自动测试image_dir中的所有图像
     prompt = "<image>\n请描述这张图中的主要物体和场景。"
     for image_file in sorted(os.listdir(args.image_dir)):
         if image_file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
@@ -58,7 +63,7 @@ def main():
             image = Image.open(image_path).convert('RGB')
             pixel_values = {k: v.to(args.device) for k, v in VLM.image2tensor(image, preprocess).items()}
 
-            messages = [{"role": "user", "content": prompt.replace('<image>', model.config.image_special_token * model.config.image_token_len)}]
+            messages = [{"role": "user", "content": prompt.replace('<image>', getattr(model.config, 'image_special_token', '<|image_pad|>') * getattr(model.config, 'image_token_len', 64))}]
             inputs_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, open_thinking=bool(args.open_thinking))
             inputs = tokenizer(inputs_text, return_tensors="pt", truncation=True).to(args.device)
 

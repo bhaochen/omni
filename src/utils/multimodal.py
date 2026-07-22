@@ -24,6 +24,7 @@ def get_vlm_model_params(model, config, ignore_patterns=('vision_encoder',)):
         Logger(f'Model Params: {total:.2f}M-A{active:.2f}M')
     else:
         Logger(f'Model Params: {total:.2f}M')
+    return total
 
 
 def init_vlm_model(vlm_config, from_weight='pretrain_vlm', tokenizer_path='../model', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_llm=0, weight_path=None, model_dir=None):

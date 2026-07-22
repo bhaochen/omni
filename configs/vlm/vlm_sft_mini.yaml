@@ -1,0 +1,36 @@
+# VLM SFT 快速验证配置（~4小时可跑完，使用 checkpoint/omni 初始化 LLM 主干）
+model:
+  hidden_size: 768
+  num_hidden_layers: 8
+  use_moe: 0
+  vocab_size: 6400
+  max_seq_len: 768
+  num_attention_heads: 8
+  num_key_value_heads: 4
+  dropout: 0.0
+  # 视觉相关
+  image_special_token: "<|image_pad|>"
+  image_ids: [12]
+  image_hidden_size: 768
+  image_token_len: 64
+
+train:
+  epochs: 1
+  batch_size: 4
+  learning_rate: 5.0e-6
+  accumulation_steps: 1
+  grad_clip: 1.0
+  dtype: bfloat16
+  save_interval: 5000
+  log_interval: 50
+  from_weight: omni
+  model_dir: checkpoint/omni   # 加载 checkpoint/omni/omni.pth
+  freeze_llm: 1
+  from_resume: 0
+  max_steps: 40000             # 限制训练步数，控制~4小时
+
+paths:
+  save_dir: checkpoint/vlm_sft_mini
+  data_path: dataset/vlm/sft_i2t.parquet
+  vision_dir: checkpoint/siglip
+  tokenizer_dir: checkpoint/omni/native_hf

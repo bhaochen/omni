@@ -143,6 +143,10 @@ python -m trainers.vlm.pretrain --config configs/vlm/vlm_pretrain_moe.yaml   # M
 # 全量 SFT
 python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft.yaml
 python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft_moe.yaml   # MoE 变体
+
+# Mini 变体（快速验证用，h=768, L=8, ~1h on 4060）
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft_mini.yaml
+python -m trainers.vlm.full_sft --config configs/vlm/vlm_sft_mini_resume.yaml   # 续训
 ```
 
 #### 全模态 VAM（文本 + 视觉 + 语音）
@@ -189,7 +193,16 @@ python scripts/eval_llm.py --load_from checkpoint/lm_full_sft_mini/hf \
                            --tokenizer_path checkpoint/lm_full_sft_mini/hf
 
 # 多模态（VLM / VAM）
-python scripts/eval_vlm.py --save_dir checkpoint/vlm --weight full_sft
+# 原生 torch 格式（.pth）
+python scripts/eval_vlm.py --native --save_dir checkpoint/vlm_sft_mini \
+                           --weight sft_vlm --hidden_size 768 \
+                           --image_dir dataset/eval_images
+
+# VLM HF 格式（需先 convert；注：转换不含 vision encoder，为纯文本 LM）
+python scripts/eval_vlm.py --load_from checkpoint/vlm_sft_mini/hf \
+                           --tokenizer_path checkpoint/omni/native_hf \
+                           --image_dir dataset/eval_images
+
 python scripts/eval_vam.py --save_dir checkpoint/vam --weight full_sft
 ```
 
@@ -200,6 +213,11 @@ python scripts/eval_vam.py --save_dir checkpoint/vam --weight full_sft
 python scripts/convert_model.py checkpoint/lm_full_sft_mini/full_sft_128.pth \
                                checkpoint/lm_full_sft_mini/hf \
                                --tokenizer_path checkpoint/tokenizer
+
+# VLM SFT（clean checkpoint 不含 vision encoder，转为纯文本 LM HF 格式）
+python scripts/convert_model.py checkpoint/vlm_sft_mini/sft_vlm_768.pth \
+                               checkpoint/vlm_sft_mini/hf \
+                               --tokenizer_path checkpoint/omni/native_hf
 
 # 从 .pth 转换到指定目录
 python scripts/convert_model.py checkpoint/omni/omni.pth checkpoint/omni/native_hf \
