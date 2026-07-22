@@ -33,40 +33,6 @@ def prep_image(b64):
     img = Image.open(io.BytesIO(base64.b64decode(b64))).convert('RGB')
     return {k: v.to(M['device']) for k, v in M['model'].vision_processor(images=img, return_tensors="pt").items()}
 
-SCENE_REFRESH_INTERVAL = 3.0
-
-def _refresh_scene(image_b64, st):
-    scene = _generate_scene(image_b64)
-    if scene:
-        st['scene_text'] = scene
-        st['scene_ts'] = time.time()
-
-def _generate_scene(image_b64):
-    """Generate a one-sentence scene description using the model itself."""
-    tok, dev = M['tokenizer'], M['device']
-    m = M['model']
-    img_tokens = m.config.image_special_token * m.config.image_token_len
-    prompt = "请用一句话描述当前场景\n\n" + img_tokens
-    msgs = [{"role": "user", "content": prompt}]
-    t = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-    x = torch.tensor(tok(t)['input_ids'], dtype=torch.long, device=dev)[None, ...]
-    pixel_values = prep_image(image_b64)
-    with MODEL_LOCK, torch.no_grad():
-        try:
-            out = m.generate(x, eos_token_id=tok.eos_token_id,
-                             max_new_tokens=48, temperature=0.3, top_p=0.9,
-                             pixel_values=pixel_values)
-            scene = tok.decode(out[0].tolist(), skip_special_tokens=True).strip()
-            # Take only the first sentence
-            for sep in '。\n！？':
-                idx = scene.find(sep)
-                if idx > 0:
-                    scene = scene[:idx]
-            return scene if len(scene) > 4 else None
-        except Exception as e:
-            print(f'Scene generation failed: {e}')
-            return None
-
 def build_ids(prompt, history):
     tok, dev = M['tokenizer'], M['device']
     cfg = M['cfg']
@@ -128,7 +94,7 @@ def run_generate(x, audio_inputs, audio_lens, pixel_values, **kw):
             x, M['tokenizer'].eos_token_id, stream=True, return_audio_codes=True,
             audio_inputs=audio_inputs, audio_lens=audio_lens, pixel_values=pixel_values, **kw)
 
-def prepare_turn(text, samples, image_b64, do_asr_for_image, scene_text=None):
+def prepare_turn(text, samples, image_b64, do_asr_for_image):
     audio_inputs = audio_lens = pixel_values = None
     prompt = text or ''
     user_text = text or ''
@@ -144,13 +110,10 @@ def prepare_turn(text, samples, image_b64, do_asr_for_image, scene_text=None):
                 def _a(): asr_result[0] = asr_run(sa)
                 asr_thread = threading.Thread(target=_a); asr_thread.start()
     if image_b64:
-        if scene_text:
-            prompt = "[摄像头场景: " + scene_text + "]\n" + prompt
-        else:
-            m = M['model']
-            pixel_values = prep_image(image_b64)
-            img_tokens = m.config.image_special_token * m.config.image_token_len
-            prompt = (img_tokens + "\n" + prompt) if prompt.strip() else img_tokens
+        pixel_values = prep_image(image_b64)
+        m = M['model']
+        img_tokens = m.config.image_special_token * m.config.image_token_len
+        prompt = (img_tokens + "\n" + prompt) if prompt.strip() else img_tokens
     return audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_thread, asr_result
 
 
@@ -237,7 +200,7 @@ def init_web_app():
     @sock.route('/ws/realtime')
     def realtime(ws):
         session = RealtimeSession(M['vad_path'])
-        q = queue.Queue(); alive = [True]; state = {'history': [], 'image': None, 'scene_text': None, 'scene_ts': 0}
+        q = queue.Queue(); alive = [True]; state = {'history': [], 'image': None}
         n_hist = M['cfg'].max_history_turns
 
         def push_audio(data):
@@ -246,9 +209,7 @@ def init_web_app():
         def set_ctx(msg):
             h = msg.get('history') or []
             state['history'] = h[-n_hist:] if n_hist > 0 else []
-            if 'image' in msg:
-                state['image'] = msg.get('image')
-                threading.Thread(target=_refresh_scene, args=(state['image'], state), daemon=True).start()
+            if 'image' in msg: state['image'] = msg.get('image')
             if 'voice' in msg: state['voice'] = msg.get('voice', 'default')
 
         def poll_interrupt():
@@ -294,8 +255,7 @@ def init_web_app():
                 audio = session.get_audio()
                 ws.send(json.dumps({'type': 'generating'}))
                 audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_th, asr_res = prepare_turn(
-                    '', audio, state['image'], do_asr_for_image=True,
-                    scene_text=state.get('scene_text'))
+                    '', audio, state['image'], do_asr_for_image=True)
                 if state['image']: state['image'] = None
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
