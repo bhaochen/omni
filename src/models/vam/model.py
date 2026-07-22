@@ -356,7 +356,7 @@ class VAM(LMForCausalLM):
                 out = self.forward(torch.cat((audio_buffer[:, :, -1:], input_ids[:, -1:].unsqueeze(1)), dim=1), past_key_values=past_kvs, use_cache=use_cache, **args)
             past_kvs = out.past_key_values
 
-            logits = out.logits[0, -1, :].clone() / (temperature + 1e-9)
+            logits = out.logits[0, -1, :].clone().float() / (temperature + 1e-9)
             if rp != 1.0:
                 seen = list(set(input_ids[0].tolist()))
                 score = logits[seen]
@@ -383,7 +383,7 @@ class VAM(LMForCausalLM):
                 if audio_step < i:
                     audio_codes[i].append(self.audio_pad_token)
                 else:
-                    logits_i = al[0, -1, :].clone() / 0.2
+                    logits_i = al[0, -1, :].clone().float() / 0.2
                     for prev_code in audio_codes[i][-3:]:
                         score = logits_i[prev_code]
                         logits_i[prev_code] = torch.where(score > 0, score / 1.05, score * 1.05)
