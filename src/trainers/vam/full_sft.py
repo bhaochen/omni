@@ -11,7 +11,7 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from models import VAMConfig, VAM
 from dataset import VAMDataset
-from utils import get_lr, Logger, is_main_process, init_distributed_mode, setup_seed, init_omni_model, omni_checkpoint, SkipBatchSampler, log_model_params
+from utils import get_lr, Logger, is_main_process, init_distributed_mode, setup_seed, init_omni_model, omni_checkpoint, SkipBatchSampler, log_model_params, apply_config, init_logger
 
 warnings.filterwarnings('ignore')
 
@@ -43,7 +43,7 @@ def omni_collate_fn(batch):
     return input_ids, labels, audio_labels, audio_inputs, audio_lens, pixel_values, spk_emb
 
 
-def train_epoch(epoch, loader, iters, start_step=0, wandb=None):
+def train_epoch(epoch, loader, iters, start_step=0, wandb=None, args=None, model=None, optimizer=None, scaler=None, omni_config=None, autocast_ctx=None):
     start_time = time.time()
     last_step = start_step
     for step, (input_ids, labels, audio_labels, audio_inputs, audio_lens, pixel_values, spk_emb) in enumerate(loader, start=start_step + 1):
@@ -154,6 +154,8 @@ def main(default_config=None):
     parser.add_argument("--audio_encoder_dir", type=str, default="../model/SenseVoiceSmall", help="音频encoder路径(SenseVoice)")
     parser.add_argument("--vision_dir", type=str, default="../model/siglip2-base-p32-256-ve", help="CLIP视觉模型路径")
     parser.add_argument('--from_weight', default='llm', type=str, help="基于哪个权重训练，为none则不基于任何权重训练")
+    parser.add_argument('--model_dir', default=None, type=str, help="from_weight对应权重的目录（如checkpoint/omni），默认使用save_dir")
+    parser.add_argument('--tokenizer_dir', default=None, type=str, help="tokenizer目录，默认使用init_omni_model默认值")
     parser.add_argument('--from_resume', default=0, type=int, choices=[0, 1], help="是否自动检测&续训（0=否，1=是）")
     parser.add_argument('--freeze_backbone', default='none', type=str, choices=['none', 'all', 'last1'], help="冻结主干模型: none=全量训练, all=只训练audio层, last1=只训练最后1层+audio层")
     parser.add_argument('--mode', default='all', type=str, choices=['all', 'audio_proj', 'vision_proj'], help="训练模式: all=全量训练, audio_proj=只训练audio_proj, vision_proj=只训练vision_proj")
@@ -190,10 +192,12 @@ def main(default_config=None):
 
     # ========== 5. 定义模型、数据、优化器 ==========
     model, tokenizer = init_omni_model(omni_config, from_weight=args.from_weight,
+                                        tokenizer_path=args.tokenizer_dir or 'checkpoint/omni/native_hf',
                                         audio_encoder_path=args.audio_encoder_dir,
                                         vision_model_path=args.vision_dir,
                                         save_dir=args.save_dir, device=args.device,
-                                        freeze_backbone=args.freeze_backbone, from_resume=args.from_resume)
+                                        freeze_backbone=args.freeze_backbone, from_resume=args.from_resume,
+                                        model_dir=args.model_dir)
 
     if args.use_compile == 1:
         model = torch.compile(model)
@@ -218,12 +222,13 @@ def main(default_config=None):
         audio_processor=model.audio_processor,
         vision_processor=model.vision_processor,
         max_length=args.max_seq_len,
-        image_token_len=model.config.image_token_len
+        image_token_len=model.config.image_token_len,
+        max_samples=getattr(args, 'max_samples', None)
     )
 
     train_sampler = DistributedSampler(train_ds) if dist.is_initialized() else None
     scaler = torch.cuda.amp.GradScaler(enabled=(args.dtype == 'float16'))
-    optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
+    optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=args.learning_rate)
 
     # ========== 6. 从ckp恢复状态 ==========
     start_epoch, start_step = 0, 0
@@ -247,9 +252,11 @@ def main(default_config=None):
         loader = DataLoader(train_ds, batch_sampler=batch_sampler, collate_fn=omni_collate_fn, num_workers=args.num_workers, pin_memory=True)
         if skip > 0:
             Logger(f'Epoch [{epoch + 1}/{args.epochs}]: 跳过前{start_step}个step，从step {start_step + 1}开始')
-            train_epoch(epoch, loader, len(loader) + skip, start_step, wandb)
+            train_epoch(epoch, loader, len(loader) + skip, start_step, wandb,
+                        args=args, model=model, optimizer=optimizer, scaler=scaler, omni_config=omni_config, autocast_ctx=autocast_ctx)
         else:
-            train_epoch(epoch, loader, len(loader), 0, wandb)
+            train_epoch(epoch, loader, len(loader), 0, wandb,
+                        args=args, model=model, optimizer=optimizer, scaler=scaler, omni_config=omni_config, autocast_ctx=autocast_ctx)
 
     # ========== 9. 清理分布进程 ==========
     if dist.is_initialized(): dist.destroy_process_group()

@@ -18,13 +18,26 @@ class VAMDataset(Dataset):
                  audio_spk_token=2051,  # <|audio_spk|>
                  audio_vocab_size=2112,  # 2048 mimi codes + 64 special tokens
                  scheduled_sampling=0.05,
-                 image_token_len=64):
+                 image_token_len=64, max_samples=None):
         super().__init__()
-        import pyarrow as pa
-        import pyarrow.parquet as pq
-        tables = [pa.Table.from_batches(pq.ParquetFile(p.strip()).iter_batches()) for p in data_path.split(',')]
-        tables = [t.cast(pa.schema([f.with_type(pa.large_string()) if pa.types.is_string(f.type) else f for f in t.schema])) for t in tables]
-        self.table = pa.concat_tables(tables, promote_options='default')
+        tables = []
+        total = 0
+        for p in data_path.split(','):
+            pf = pq.ParquetFile(p.strip())
+            for batch in pf.iter_batches(batch_size=65536):
+                tables.append(batch)
+                total += batch.num_rows
+                if max_samples is not None and total >= max_samples:
+                    break
+            if max_samples is not None and total >= max_samples:
+                break
+        if tables:
+            self.table = pa.Table.from_batches(tables)
+            self.table = self.table.cast(pa.schema([f.with_type(pa.large_string()) if pa.types.is_string(f.type) else f for f in self.table.schema]))
+            if max_samples is not None:
+                self.table = self.table.slice(0, min(max_samples, len(self.table)))
+        else:
+            self.table = pa.Table.from_pydict({})
         self.tokenizer = tokenizer
         self.audio_processor = audio_processor
         self.vision_processor = vision_processor

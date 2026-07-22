@@ -141,14 +141,17 @@ def log_model_params(model, ignore_patterns=('audio_encoder', 'vision_encoder'))
     else: Logger(f'Model Params: {total:.2f}M')
 
 
-def init_omni_model(omni_config, from_weight='full_sft', tokenizer_path='../model', audio_encoder_path='../model/SenseVoiceSmall', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_backbone='none', from_resume=0):
+def init_omni_model(omni_config, from_weight='full_sft', tokenizer_path='../model', audio_encoder_path='../model/SenseVoiceSmall', vision_model_path='../model/siglip2-base-p32-256-ve', save_dir='../checkpoint', device='cuda', freeze_backbone='none', from_resume=0, model_dir=None):
     from transformers import AutoTokenizer
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     model = VAM(omni_config, audio_encoder_path=audio_encoder_path, vision_model_path=vision_model_path)
 
     if from_weight != 'none':
         moe_suffix = '_moe' if omni_config.use_moe else ''
-        weight_path = f'{save_dir}/{from_weight}_{omni_config.hidden_size}{moe_suffix}.pth'
+        weight_dir = model_dir or save_dir
+        weight_path = f'{weight_dir}/{from_weight}_{omni_config.hidden_size}{moe_suffix}.pth'
+        if not os.path.exists(weight_path) and model_dir:
+            weight_path = f'{model_dir}/{from_weight}.pth'
         if os.path.exists(weight_path):
             weights = torch.load(weight_path, map_location=device)
             param_shapes = {k: v.shape for k, v in model.named_parameters()}
