@@ -11,6 +11,7 @@ from serve.realtime import RealtimeSession
 M = {}
 V = {}  # voice_name -> {ref_codes, spk_emb}
 MODEL_LOCK = threading.Lock()
+SCENE_LOCK = threading.Lock()
 VOICES_BUILTIN, VOICES_UNSEEN, VOICES_MANUAL = [], [], []
 SAMPLES_PER_FRAME = 1920
 REF_FRAMES = 300
@@ -36,13 +37,28 @@ def prep_image(b64):
 SCENE_REFRESH_INTERVAL = 3.0
 
 def _refresh_scene(image_b64, st):
-    scene = _generate_scene(image_b64)
-    if scene:
-        st['scene_text'] = scene
-        st['scene_ts'] = time.time()
+    if not SCENE_LOCK.acquire(blocking=False):
+        return
+    try:
+        now = time.time()
+        if now - st.get('_last_scene_ts', 0) < SCENE_REFRESH_INTERVAL:
+            return
+        # Only run when model is idle — never block conversation
+        if not MODEL_LOCK.acquire(blocking=False):
+            return
+        st['_last_scene_ts'] = now
+        try:
+            scene = _generate_scene_locked(image_b64)
+            if scene and len(scene) > 4:
+                st['scene_text'] = scene
+                st['scene_ts'] = now
+        finally:
+            MODEL_LOCK.release()
+    finally:
+        SCENE_LOCK.release()
 
-def _generate_scene(image_b64):
-    """Generate a one-sentence scene description using the model itself."""
+def _generate_scene_locked(image_b64):
+    """Generate a one-sentence scene description. Caller must hold MODEL_LOCK."""
     tok, dev = M['tokenizer'], M['device']
     m = M['model']
     img_tokens = m.config.image_special_token * m.config.image_token_len
@@ -51,13 +67,12 @@ def _generate_scene(image_b64):
     t = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
     x = torch.tensor(tok(t)['input_ids'], dtype=torch.long, device=dev)[None, ...]
     pixel_values = prep_image(image_b64)
-    with MODEL_LOCK, torch.no_grad():
+    with torch.no_grad():
         try:
             out = m.generate(x, eos_token_id=tok.eos_token_id,
                              max_new_tokens=48, temperature=0.3, top_p=0.9,
                              pixel_values=pixel_values)
             scene = tok.decode(out[0].tolist(), skip_special_tokens=True).strip()
-            # Take only the first sentence
             for sep in '。\n！？':
                 idx = scene.find(sep)
                 if idx > 0:
@@ -237,7 +252,7 @@ def init_web_app():
     @sock.route('/ws/realtime')
     def realtime(ws):
         session = RealtimeSession(M['vad_path'])
-        q = queue.Queue(); alive = [True]; state = {'history': [], 'image': None, 'scene_text': None, 'scene_ts': 0}
+        q = queue.Queue(); alive = [True]; state = {'history': [], 'image': None, 'scene_text': None, 'scene_ts': 0, '_last_scene_ts': 0}
         n_hist = M['cfg'].max_history_turns
 
         def push_audio(data):
