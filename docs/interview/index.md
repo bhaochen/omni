@@ -11,6 +11,7 @@
 | [多模态](multimodal.md) | VLM/VAM 注入范式、SigLIP/SenseVoice、TalkerModule、流式生成、冻结策略 |
 | [MoE](moe.md) | 路由机制、负载均衡、死 Expert 梯度、Expert 初始化、推理优化 |
 | [推理优化](inference.md) | KV Cache、Prefill/Decode、采样策略、Repetition Penalty、量化、显存估算 |
+| [工程挑战](challenges.md) | HF 转换、FP16 溢出、CUDA 同步、训练偏见、实时架构、流式音频 |
 
 ---
 

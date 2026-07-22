@@ -33,16 +33,11 @@ def prep_image(b64):
     img = Image.open(io.BytesIO(base64.b64decode(b64))).convert('RGB')
     return {k: v.to(M['device']) for k, v in M['model'].vision_processor(images=img, return_tensors="pt").items()}
 
-def build_ids(prompt, history, image_context=False):
+def build_ids(prompt, history):
     tok, dev = M['tokenizer'], M['device']
     cfg = M['cfg']
     hist = history[-cfg.max_history_turns:] if cfg.max_history_turns > 0 else []
-    if image_context:
-        sys_prompt = "You have live camera input. Use visual information as conversation context naturally. Do not describe what you see unless asked."
-        msgs = [{"role": "system", "content": sys_prompt}]
-    else:
-        msgs = []
-    msgs += hist + [{"role": "user", "content": prompt}]
+    msgs = hist + [{"role": "user", "content": prompt}]
     t = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
     return torch.tensor(tok(t)['input_ids'], dtype=torch.long, device=dev)[None, ...]
 
@@ -117,11 +112,7 @@ def prepare_turn(text, samples, image_b64, do_asr_for_image):
     if image_b64:
         pixel_values = prep_image(image_b64)
         m = M['model']
-        img_tokens = m.config.image_special_token * m.config.image_token_len
-        if prompt.strip():
-            prompt = "[不描述画面]\n" + img_tokens + "\n" + prompt
-        else:
-            prompt = img_tokens
+        prompt = (prompt + "\n\n" if prompt else "") + "请描述这张图片\n\n" + m.config.image_special_token * m.config.image_token_len
     return audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_thread, asr_result
 
 
@@ -161,7 +152,9 @@ def init_web_app():
         def gen():
             audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_th, asr_res = prepare_turn(
                 d.get('text', ''), samples, d.get('image'), do_asr_for_image=True)
-            x = build_ids(prompt, history, image_context=d.get('image') is not None)
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            x = build_ids(prompt, history)
             asr_sent = False
             if user_text and samples is not None and d.get('image'):
                 yield sse({'type': 'user_prompt', 'content': user_text}); asr_sent = True
@@ -260,11 +253,12 @@ def init_web_app():
                 session.generating = True
                 audio = session.get_audio()
                 ws.send(json.dumps({'type': 'generating'}))
-                has_image = state.get('image') is not None
                 audio_inputs, audio_lens, pixel_values, prompt, user_text, asr_th, asr_res = prepare_turn(
                     '', audio, state['image'], do_asr_for_image=True)
                 if state['image']: state['image'] = None
-                x = build_ids(prompt, state['history'], image_context=has_image)
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                x = build_ids(prompt, state['history'])
                 va_rt = voice_args(state.get('voice', 'default'))
 
                 frames, full_text, interrupted = [], '', False

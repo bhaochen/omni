@@ -357,6 +357,7 @@ class VAM(LMForCausalLM):
             past_kvs = out.past_key_values
 
             logits = out.logits[0, -1, :].clone().float() / (temperature + 1e-9)
+            logits = torch.nan_to_num(logits, nan=-100.0, posinf=-100.0, neginf=-100.0)
             if rp != 1.0:
                 seen = list(set(input_ids[0].tolist()))
                 score = logits[seen]
@@ -366,7 +367,11 @@ class VAM(LMForCausalLM):
                 mask = torch.cumsum(F.softmax(sorted_l, dim=-1), dim=-1) > top_p
                 mask[1:], mask[0] = mask[:-1].clone(), False
                 logits[sorted_i[mask]] = -float('Inf')
-            text_token = torch.multinomial(F.softmax(logits, dim=-1), 1).item()
+            probs = F.softmax(logits, dim=-1)
+            probs = torch.nan_to_num(probs)
+            if probs.sum() <= 0:
+                probs = torch.ones_like(probs) / probs.shape[-1]
+            text_token = torch.multinomial(probs, 1).item()
 
             if text_finished:
                 text_token = args.get('enter_token_id', 201) if first_finished else args.get('pad_token_id', 0)
