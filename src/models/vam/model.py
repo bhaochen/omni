@@ -304,7 +304,12 @@ class VAM(LMForCausalLM):
         if stream:
             return self.stream_generate(input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache, return_audio_codes, **args)
         tokens = list(self.stream_generate(input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache, return_audio_codes, **args))
-        return tokens[-1] if tokens else input_ids
+        if tokens:
+            for text_out, _ in reversed(tokens):
+                if text_out is not None:
+                    return text_out
+            return tokens[-1]
+        return input_ids
 
     def stream_generate(self, input_ids, eos_token_id, max_new_tokens, temperature, top_p, rp, use_cache, return_audio_codes=False, **args):
         start_pos, past_kvs, text_finished, first_finished = input_ids.shape[1], None, False, True
