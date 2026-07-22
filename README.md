@@ -195,13 +195,17 @@ python scripts/eval_llm.py --load_from checkpoint/lm_full_sft_mini/hf \
 # 多模态（VLM / VAM）
 # 原生 torch 格式（.pth）
 python scripts/eval_vlm.py --native --save_dir checkpoint/vlm_sft_mini \
-                           --weight sft_vlm --hidden_size 768 \
-                           --image_dir dataset/eval_images
+                           --weight sft_vlm --hidden_size 768
+
+python scripts/eval_vlm.py --native --save_dir checkpoint/omni-v \
+                           --weight omni-v --hidden_size 768
 
 # VLM HF 格式（需先 convert；注：转换不含 vision encoder，为纯文本 LM）
 python scripts/eval_vlm.py --load_from checkpoint/vlm_sft_mini/hf \
-                           --tokenizer_path checkpoint/omni/native_hf \
-                           --image_dir dataset/eval_images
+                           --tokenizer_path checkpoint/omni/native_hf
+
+python scripts/eval_vlm.py --load_from checkpoint/omni-v/hf \
+                           --tokenizer_path checkpoint/omni/native_hf
 
 python scripts/eval_vam.py --save_dir checkpoint/vam --weight full_sft
 ```
@@ -217,6 +221,11 @@ python scripts/convert_model.py checkpoint/lm_full_sft_mini/full_sft_128.pth \
 # VLM SFT（clean checkpoint 不含 vision encoder，转为纯文本 LM HF 格式）
 python scripts/convert_model.py checkpoint/vlm_sft_mini/sft_vlm_768.pth \
                                checkpoint/vlm_sft_mini/hf \
+                               --tokenizer_path checkpoint/omni/native_hf
+
+# VLM Pretrain
+python scripts/convert_model.py checkpoint/omni-v/omni-v.pth \
+                               checkpoint/omni-v/hf \
                                --tokenizer_path checkpoint/omni/native_hf
 
 # 从 .pth 转换到指定目录

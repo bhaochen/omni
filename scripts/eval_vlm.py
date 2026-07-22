@@ -13,8 +13,10 @@ warnings.filterwarnings('ignore')
 def init_model(args):
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path, trust_remote_code=True)
     if args.native:
-        moe_suffix = '_moe' if args.use_moe else ''
-        ckp = f'{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
+        ckp = f'{args.save_dir}/{args.weight}.pth'
+        if not os.path.exists(ckp):
+            moe_suffix = '_moe' if args.use_moe else ''
+            ckp = f'{args.save_dir}/{args.weight}_{args.hidden_size}{moe_suffix}.pth'
         state = torch.load(ckp, map_location=args.device)
         n_layers = max(int(k.split('.')[2]) for k in state if k.startswith('model.layers.')) + 1
         model = VLM(
@@ -55,9 +57,13 @@ def main():
 
     model, tokenizer, preprocess = init_model(args)
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-    prompt = "<image>\n请描述这张图中的主要物体和场景。"
-    for image_file in sorted(os.listdir(args.image_dir)):
-        if image_file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
+
+    mode = input('[0] 自动测试目录图片\n[1] 手动输入（图片路径 + 文本）\n')
+    if mode == '0':
+        prompt = "<image>\n请描述这张图中的主要物体和场景。"
+        for image_file in sorted(os.listdir(args.image_dir)):
+            if not image_file.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
+                continue
             setup_seed(random.randint(1, 31415926))
             image_path = os.path.join(args.image_dir, image_file)
             image = Image.open(image_path).convert('RGB')
@@ -79,6 +85,38 @@ def main():
             )
             gen_tokens = len(generated_ids[0]) - len(inputs["input_ids"][0])
             print(f'\n[Speed]: {gen_tokens / (time.time() - st):.2f} tokens/s\n\n') if args.show_speed else print('\n\n')
+    else:
+        while True:
+            image_path = input('图片路径（留空跳过）: ').strip()
+            prompt = input('💬: ').strip()
+            if not prompt:
+                break
+            setup_seed(random.randint(1, 31415926))
+            pixel_values = None
+            if image_path and os.path.exists(image_path):
+                image = Image.open(image_path).convert('RGB')
+                pixel_values = {k: v.to(args.device) for k, v in VLM.image2tensor(image, preprocess).items()}
+                if '<image>' not in prompt:
+                    prompt = '<image>\n' + prompt
+
+            content = prompt.replace('<image>', getattr(model.config, 'image_special_token', '<|image_pad|>') * getattr(model.config, 'image_token_len', 64))
+            messages = [{"role": "user", "content": content}]
+            inputs_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, open_thinking=bool(args.open_thinking))
+            inputs = tokenizer(inputs_text, return_tensors="pt", truncation=True).to(args.device)
+
+            print('🤖: ', end='')
+            st = time.time()
+            gen_kwargs = dict(
+                inputs=inputs["input_ids"], attention_mask=inputs["attention_mask"],
+                max_new_tokens=args.max_new_tokens, do_sample=True, streamer=streamer,
+                pad_token_id=tokenizer.pad_token_id, eos_token_id=tokenizer.eos_token_id,
+                top_p=args.top_p, temperature=args.temperature,
+            )
+            if pixel_values is not None:
+                gen_kwargs['pixel_values'] = pixel_values
+            generated_ids = model.generate(**gen_kwargs)
+            gen_tokens = len(generated_ids[0]) - len(inputs["input_ids"][0])
+            print(f'\n[Speed]: {gen_tokens / (time.time() - st):.2f} tokens/s\n') if args.show_speed else print()
 
 if __name__ == "__main__":
     main()
