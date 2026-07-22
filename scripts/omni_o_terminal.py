@@ -1,4 +1,4 @@
-import argparse, os, sys, json, io, time, math, torch, threading, queue, logging, contextlib, warnings
+import argparse, os, sys, io, time, torch, threading, queue, logging, contextlib, warnings
 import numpy as np
 
 warnings.filterwarnings('ignore')
@@ -10,7 +10,74 @@ from serve.realtime import SileroVAD
 
 SAMPLE_RATE = 16000
 AUDIO_SR = 24000
-SAMPLES_PER_FRAME = 1920
+
+
+class RealtimeRecorder:
+    def __init__(self, vad, threshold=0.5, min_speech_ms=128, min_silence_ms=800, mic=None):
+        self.vad = vad
+        self.threshold = threshold
+        self.min_speech = int(SAMPLE_RATE * min_speech_ms / 1000)
+        self.min_silence = int(SAMPLE_RATE * min_silence_ms / 1000)
+        self.mic = mic
+        self.q = queue.Queue()
+        self.lock = threading.Lock()
+        self.reset()
+
+    def reset(self):
+        self.state = 'idle'
+        self.buffer = []
+        self.ring = []
+        self.speaking = False
+        self.speech_samples = 0
+        self.silence_samples = 0
+        self.tail_silence = 0
+        self.interrupt = False
+
+    def _feed(self, w):
+        prob = self.vad(w, SAMPLE_RATE)
+        with self.lock:
+            if prob > self.threshold:
+                self.silence_samples = self.tail_silence = 0
+                self.speech_samples += len(w)
+                self.buffer.append(w)
+                if self.speech_samples >= self.min_speech and not self.speaking:
+                    self.speaking = True
+                    self.buffer = self.ring + self.buffer
+                    self.ring = []
+                if self.speaking and self.state in ('processing', 'playing'):
+                    self.interrupt = True
+            elif self.speaking:
+                self.silence_samples += len(w)
+                self.tail_silence += 1
+                self.buffer.append(w)
+                if self.silence_samples >= self.min_silence:
+                    if self.tail_silence > 1:
+                        del self.buffer[-(self.tail_silence - 1):]
+                    audio = np.concatenate(self.buffer)
+                    self.buffer.clear()
+                    self.speaking = False
+                    self.speech_samples = self.silence_samples = self.tail_silence = 0
+                    self.q.put(audio)
+            else:
+                if self.speech_samples > 0:
+                    self.buffer.clear()
+                self.speech_samples = 0
+                self.ring = [w]
+
+    def start(self):
+        import sounddevice as sd
+        def _run():
+            with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype='float32',
+                                blocksize=512, device=self.mic) as stream:
+                while getattr(self, '_running', True):
+                    chunk, _ = stream.read(512)
+                    self._feed(chunk.flatten())
+        self._running = True
+        self.thread = threading.Thread(target=_run, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self._running = False
 
 
 def asr_run(model, samples):
@@ -49,11 +116,7 @@ def init_model(args):
                 audio_encoder_path=os.path.join(root, args.sensevoice_dir),
                 vision_model_path=os.path.join(root, args.siglip_dir))
     state = torch.load(ckpt_path, map_location='cpu', weights_only=True)
-    missing, unexpected = model.load_state_dict(state, strict=False)
-    if missing:
-        print(f'  Missing keys (encoders): {len(missing)}')
-    if unexpected:
-        print(f'  Unexpected keys: {len(unexpected)}')
+    model.load_state_dict(state, strict=False)
     if model.audio_encoder is not None:
         model.audio_encoder.to(args.device)
     model = model.half().eval().to(args.device)
@@ -74,67 +137,6 @@ def init_model(args):
     return model, tokenizer, asr, mimi, vad
 
 
-def record_audio(args, vad):
-    import sounddevice as sd
-    vad.reset()
-    buffer = []
-    ring = []
-    speaking = False
-    speech_samples = 0
-    silence_samples = 0
-    tail_silence = 0
-    min_speech = int(SAMPLE_RATE * args.min_speech_ms / 1000)
-    min_silence = int(SAMPLE_RATE * args.min_silence_ms / 1000)
-
-    stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype='float32',
-                            blocksize=512, device=args.mic)
-    with stream:
-        while True:
-            chunk, _ = stream.read(512)
-            chunk = chunk.flatten()
-
-            for i in range(0, len(chunk), 512):
-                w = chunk[i:i + 512]
-                if len(w) < 512:
-                    w = np.pad(w, (0, 512 - len(w)))
-                prob = vad(w, SAMPLE_RATE)
-
-                if prob > args.vad_threshold:
-                    silence_samples = tail_silence = 0
-                    speech_samples += len(w)
-                    buffer.append(w)
-                    if speech_samples >= min_speech and not speaking:
-                        speaking = True
-                        buffer = ring + buffer
-                        ring = []
-                elif speaking:
-                    silence_samples += len(w)
-                    tail_silence += 1
-                    buffer.append(w)
-                    if silence_samples >= min_silence:
-                        if tail_silence > 1:
-                            del buffer[-(tail_silence - 1):]
-                        audio = np.concatenate(buffer)
-                        return audio
-                else:
-                    if speech_samples > 0:
-                        buffer.clear()
-                    speech_samples = 0
-                    ring = [w]
-
-                if args.wait_key and not speaking:
-                    import select
-                    if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                        sys.stdin.read(1)
-                        return None
-
-
-def play_audio(pcm, rate=AUDIO_SR):
-    import sounddevice as sd
-    sd.play(pcm, rate)
-    sd.wait()
-
-
 def mimi_decode(model, codes_2d, device):
     codes = codes_2d.T.unsqueeze(0).to(device)
     codes = torch.where(codes >= 2049, torch.zeros_like(codes), codes)
@@ -143,20 +145,19 @@ def mimi_decode(model, codes_2d, device):
     return audio
 
 
-def build_prompt(tokenizer, history, text):
-    msgs = history + [{"role": "user", "content": text}]
-    t = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-    return torch.tensor(tokenizer(t)['input_ids'], dtype=torch.long, device='cpu')[None, ...]
-
-
-def generate_response(model, tokenizer, mimi, x, device, max_new_tokens=512):
+def generate_response(recorder, model, tokenizer, mimi, x, device, max_new_tokens=512):
     audio_frames = []
     text_out = ''
+    interrupted = False
     with torch.no_grad():
         for y, af in model.generate(
             x, tokenizer.eos_token_id, stream=True, return_audio_codes=True,
             max_new_tokens=max_new_tokens, temperature=0.7, top_p=0.85,
         ):
+            with recorder.lock:
+                if recorder.interrupt:
+                    interrupted = True
+                    break
             if y is not None:
                 ans = tokenizer.decode(y[0].tolist(), skip_special_tokens=True)
                 new_text = ans[len(text_out):]
@@ -166,7 +167,9 @@ def generate_response(model, tokenizer, mimi, x, device, max_new_tokens=512):
             if af:
                 audio_frames.append(af)
     print()
-    if audio_frames:
+    if interrupted:
+        print('  [interrupted]')
+    if audio_frames and not interrupted:
         codes = [f for f in audio_frames if f and len(f) == 8]
         if codes:
             codes_t = torch.tensor(codes, dtype=torch.long)
@@ -191,8 +194,14 @@ def warmup(model, mimi, device):
             mimi.decode(torch.zeros(1, 8, 1, dtype=torch.long, device=device))
 
 
+def build_prompt(tokenizer, history, text):
+    msgs = history + [{"role": "user", "content": text}]
+    t = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+    return torch.tensor(tokenizer(t)['input_ids'], dtype=torch.long, device='cpu')[None, ...]
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Omni-O Terminal Voice Chat')
+    parser = argparse.ArgumentParser(description='Omni-O Terminal Voice Chat (with interrupt)')
     parser.add_argument('--load_from', default='checkpoint/omni-o')
     parser.add_argument('--weight', default='omni-o')
     parser.add_argument('--tokenizer_dir', default='checkpoint/omni/native_hf')
@@ -206,68 +215,87 @@ def main():
     parser.add_argument('--max_new_tokens', default=256, type=int)
     parser.add_argument('--vad_threshold', default=0.5, type=float)
     parser.add_argument('--min_speech_ms', default=128, type=int)
-    parser.add_argument('--min_silence_ms', default=800, type=int)
+    parser.add_argument('--min_silence_ms', default=600, type=int)
     parser.add_argument('--mic', default=None, type=int, help='Microphone device index')
-    parser.add_argument('--wait_key', default=0, type=int,
-                        help='Press Enter to start recording (0=auto VAD)')
     args = parser.parse_args()
 
     model, tokenizer, asr, mimi, vad = init_model(args)
     device = args.device
-    x = build_prompt(tokenizer, [], 'Please introduce yourself.')
+
     print('Warmup...')
     warmup(model, mimi, device)
     print('Warmup done!\n')
 
     import sounddevice as sd
-    history = []
+    recorder = RealtimeRecorder(vad, args.vad_threshold, args.min_speech_ms,
+                                args.min_silence_ms, args.mic)
+    recorder.start()
 
-    print('=== Omni-O Terminal Voice Chat ===')
-    print(f'Mic: {sd.query_devices(args.mic, "input")["name"] if args.mic is not None else "default"}')
-    print(f'Say something (VAD: silence>{args.min_silence_ms}ms = end of speech)')
+    history = []
+    mic_name = sd.query_devices(args.mic, 'input')['name'] if args.mic is not None else 'default'
+    print('=== Omni-O Terminal Voice Chat (interruptible) ===')
+    print(f'Mic: {mic_name}')
+    print('Speak to start — silence >=600ms = end of turn')
+    print('Speak during playback to interrupt')
     print()
 
-    while True:
-        if args.wait_key:
-            input('Press Enter to record...')
-            print('Recording... (speak now)')
-            audio = record_audio(args, vad)
-            if audio is None:
-                continue
-        else:
-            audio = record_audio(args, vad)
-            if audio is None:
+    try:
+        while True:
+            audio = recorder.q.get()
+            if len(audio) < SAMPLE_RATE * 0.1:
                 continue
 
-        print(f'\r  Captured {len(audio) / SAMPLE_RATE:.1f}s audio')
+            seconds = len(audio) / SAMPLE_RATE
+            print(f'\r  {seconds:.1f}s audio  ASR...', end=' ', flush=True)
+            st = time.time()
+            text = asr_run(asr, audio)
+            print(f'"{text}" ({time.time() - st:.1f}s)')
+            if not text.strip():
+                continue
 
-        print('  ASR...', end=' ', flush=True)
-        st = time.time()
-        text = asr_run(asr, audio)
-        print(f'"{text}" ({time.time() - st:.1f}s)')
-        if not text:
-            print('  (no speech detected)')
-            continue
+            history.append({"role": "user", "content": text})
 
-        history.append({"role": "user", "content": text})
+            with recorder.lock:
+                recorder.state = 'processing'
 
-        print('  Generating...', end=' ', flush=True)
-        st = time.time()
-        x = build_prompt(tokenizer, history[:-1], text)
-        x = x.to(device)
-        text_resp, pcm = generate_response(model, tokenizer, mimi, x, device,
-                                            max_new_tokens=args.max_new_tokens)
-        print(f'  ({time.time() - st:.1f}s)')
+            x = build_prompt(tokenizer, history[:-1], text).to(device)
+            print('  ', end='', flush=True)
+            st = time.time()
+            text_resp, pcm = generate_response(recorder, model, tokenizer, mimi,
+                                                x, device, args.max_new_tokens)
 
-        if text_resp:
-            history.append({"role": "assistant", "content": text_resp})
+            with recorder.lock:
+                interrupted = recorder.interrupt
+                recorder.interrupt = False
+                recorder.state = 'playing' if not interrupted else 'idle'
 
-        if pcm is not None and len(pcm) > 0:
-            print('  Playing...', end=' ', flush=True)
-            play_audio(pcm)
-            print('done')
+            if text_resp:
+                if not interrupted:
+                    history.append({"role": "assistant", "content": text_resp})
 
-        print()
+            if pcm is not None and len(pcm) > 0:
+                print(f'  Playing... ({time.time() - st:.1f}s gen)', end=' ', flush=True)
+                sd.play(pcm, AUDIO_SR)
+                # Poll playback with interrupt check
+                while sd.get_stream().active:
+                    with recorder.lock:
+                        if recorder.interrupt:
+                            sd.stop()
+                            print('[interrupted]', end=' ')
+                            with recorder.lock:
+                                recorder.interrupt = False
+                                recorder.state = 'idle'
+                            break
+                    time.sleep(0.05)
+                print('done')
+
+            with recorder.lock:
+                recorder.state = 'idle'
+
+    except KeyboardInterrupt:
+        print('\nBye!')
+    finally:
+        recorder.stop()
 
 
 if __name__ == '__main__':
