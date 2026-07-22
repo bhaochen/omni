@@ -340,9 +340,10 @@ def init_model(args):
     from transformers import AutoTokenizer
     M['tokenizer'] = AutoTokenizer.from_pretrained(tok_dir)
 
-    M['model_name'] = args.weight
+    model_name = args.weight or os.path.basename(args.load_from.rstrip('/'))
+    M['model_name'] = model_name
     params = sum(p.numel() for p in model.parameters()) / 1e6
-    print(f'Loaded omni-o ({args.weight}): {params:.2f}M')
+    print(f'Loaded {model_name}: {params:.2f}M')
 
     try:
         from transformers import MimiModel
@@ -401,8 +402,8 @@ def init_model(args):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Omni-O Real-time Voice Call')
-    p.add_argument('--load_from', default='checkpoint/omni-o', help='模型权重目录')
-    p.add_argument('--weight', default='omni-o', help='权重文件名（不含.pth后缀）')
+    p.add_argument('--load_from', default='checkpoint/omni-o-hf', help='HF 模型权重目录（自动检测 .pth 目录兼容）')
+    p.add_argument('--weight', default='', help='权重文件名（仅 .pth 模式，不含后缀）')
     p.add_argument('--tokenizer_dir', default='checkpoint/omni/native_hf', help='tokenizer目录')
     p.add_argument('--sensevoice_dir', default='checkpoint/sensevoice', help='SenseVoice ASR目录')
     p.add_argument('--siglip_dir', default='checkpoint/siglip', help='SigLIP视觉编码器目录')
