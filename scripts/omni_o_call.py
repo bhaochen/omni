@@ -294,35 +294,46 @@ def init_model(args):
         from funasr import AutoModel
         M['asr'] = AutoModel(model=os.path.join(root, args.sensevoice_dir), trust_remote_code=True, device=args.device, disable_update=True)
 
-    config = VAMConfig(
-        hidden_size=args.hidden_size,
-        num_hidden_layers=args.num_hidden_layers,
-        num_attention_heads=args.hidden_size // 96,
-        num_key_value_heads=args.hidden_size // 192,
-        use_moe=args.use_moe,
-    )
     ckpt_dir = os.path.join(root, args.load_from)
-    weight = args.weight
-    if not weight.endswith('.pth'):
-        if args.use_moe and not weight.endswith('_moe'):
-            weight = f'{weight}_moe.pth'
-        else:
-            weight = f'{weight}.pth'
-    ckpt_path = os.path.join(ckpt_dir, weight)
+    is_hf = os.path.exists(os.path.join(ckpt_dir, 'config.json')) and \
+            (os.path.exists(os.path.join(ckpt_dir, 'model.safetensors')) or
+             os.path.exists(os.path.join(ckpt_dir, 'pytorch_model.bin')))
 
-    model = VAM(config,
-                audio_encoder_path=os.path.join(root, args.sensevoice_dir),
-                vision_model_path=os.path.join(root, args.siglip_dir))
-    state = torch.load(ckpt_path, map_location='cpu', weights_only=True)
-    missing, unexpected = model.load_state_dict(state, strict=False)
-    if missing:
-        print(f'  Missing keys (expected for encoders): {len(missing)}')
-    if unexpected:
-        print(f'  Unexpected keys: {len(unexpected)}')
-    if model.audio_encoder is not None:
-        model.audio_encoder.to(args.device)
-    if model.vision_encoder is not None:
-        model.vision_encoder.to(args.device)
+    if is_hf:
+        model = VAM.from_pretrained(
+            ckpt_dir,
+            audio_encoder_path=os.path.join(root, args.sensevoice_dir),
+            vision_model_path=os.path.join(root, args.siglip_dir),
+        )
+    else:
+        config = VAMConfig(
+            hidden_size=args.hidden_size,
+            num_hidden_layers=args.num_hidden_layers,
+            num_attention_heads=args.hidden_size // 96,
+            num_key_value_heads=args.hidden_size // 192,
+            use_moe=args.use_moe,
+        )
+        weight = args.weight
+        if not weight.endswith('.pth'):
+            if args.use_moe and not weight.endswith('_moe'):
+                weight = f'{weight}_moe.pth'
+            else:
+                weight = f'{weight}.pth'
+        ckpt_path = os.path.join(ckpt_dir, weight)
+        model = VAM(config,
+                    audio_encoder_path=os.path.join(root, args.sensevoice_dir),
+                    vision_model_path=os.path.join(root, args.siglip_dir))
+        state = torch.load(ckpt_path, map_location='cpu', weights_only=True)
+        missing, unexpected = model.load_state_dict(state, strict=False)
+        if missing:
+            print(f'  Missing keys (expected for encoders): {len(missing)}')
+        if unexpected:
+            print(f'  Unexpected keys: {len(unexpected)}')
+        if model.audio_encoder is not None:
+            model.audio_encoder.to(args.device)
+        if model.vision_encoder is not None:
+            model.vision_encoder.to(args.device)
+
     M['model'] = model.half().eval().to(args.device)
 
     tok_dir = os.path.join(root, args.tokenizer_dir)

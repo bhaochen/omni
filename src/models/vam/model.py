@@ -91,12 +91,34 @@ class VAM(LMForCausalLM):
         self.audio_proj = MMAudioProjector(config.audio_hidden_size, config.hidden_size)
         self.vision_proj = MMVisionProjector(config.image_hidden_size, config.hidden_size, target_tokens=config.image_token_len)
         self.audio_pad_token, self.audio_stop_token, self.audio_spk_token = config.audio_pad_token, config.audio_stop_token, config.audio_spk_token
-        audio_encoder = SenseVoiceAudioEncoder(audio_encoder_path) if audio_encoder_path else SenseVoiceAudioEncoder()
-        object.__setattr__(self, 'audio_encoder', audio_encoder)
-        object.__setattr__(self, 'audio_processor', audio_encoder.processor)
-        vision_encoder = SiglipVisionEncoder(vision_model_path) if vision_model_path else SiglipVisionEncoder()
-        object.__setattr__(self, 'vision_encoder', vision_encoder)
-        object.__setattr__(self, 'vision_processor', vision_encoder.processor)
+        meta_init = any(p.device.type == 'meta' for p in self.parameters())
+        if meta_init:
+            object.__setattr__(self, 'audio_encoder', None)
+            object.__setattr__(self, 'audio_processor', None)
+            object.__setattr__(self, 'vision_encoder', None)
+            object.__setattr__(self, 'vision_processor', None)
+        else:
+            audio_enc = SenseVoiceAudioEncoder(audio_encoder_path) if audio_encoder_path else SenseVoiceAudioEncoder()
+            object.__setattr__(self, 'audio_encoder', audio_enc)
+            object.__setattr__(self, 'audio_processor', audio_enc.processor)
+            vision_enc = SiglipVisionEncoder(vision_model_path) if vision_model_path else SiglipVisionEncoder()
+            object.__setattr__(self, 'vision_encoder', vision_enc)
+            object.__setattr__(self, 'vision_processor', vision_enc.processor)
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+        audio_encoder_path = kwargs.pop('audio_encoder_path', None)
+        vision_model_path = kwargs.pop('vision_model_path', None)
+        model = super().from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
+        if audio_encoder_path and model.audio_encoder is None:
+            enc, proc = cls.load_sensevoice(audio_encoder_path)
+            object.__setattr__(model, 'audio_encoder', enc)
+            object.__setattr__(model, 'audio_processor', proc)
+        if vision_model_path and model.vision_encoder is None:
+            enc, proc = cls.load_vision(vision_model_path)
+            object.__setattr__(model, 'vision_encoder', enc)
+            object.__setattr__(model, 'vision_processor', proc)
+        return model
 
     @staticmethod
     def load_sensevoice(path):
