@@ -78,8 +78,10 @@ scripts/              # 推理 / 服务 / 转换脚本
 ├── eval_vam.py      # 全模态推理
 ├── serve_openai_api.py # OpenAI 兼容 API 服务
 ├── omni_web_demo.py # 网页演示（含实时语音）
+├── omni_o_call.py   # 实时语音视频通话服务（Chat SSE + WebSocket）
 ├── eval_toolcall.py # 工具调用评测
-└── convert_model.py # torch <-> transformers 权重互转
+├── convert_model.py # torch <-> transformers 权重互转
+└── convert_omni_o_to_hf.py # Omni-O .pth → HF 格式
 ```
 
 ## 安装
@@ -207,13 +209,23 @@ python scripts/eval_vlm.py --load_from checkpoint/vlm_sft_mini/hf \
 python scripts/eval_vlm.py --load_from checkpoint/omni-v/hf \
                            --tokenizer_path checkpoint/omni/native_hf
 
+# VAM 原生 torch 格式
 python scripts/eval_vam.py --save_dir checkpoint/vam --weight full_sft
+
+# VAM HF 格式（先 convert，加载含 audio/vision encoder）
+python scripts/eval_vam.py --load_from checkpoint/vam/hf \
+                           --sensevoice_dir checkpoint/sensevoice \
+                           --siglip_dir checkpoint/siglip
+
+# Omni-O 实时语音服务
+# 网页端（Chat SSE + 实时语音 WebSocket + 摄像头 + 语音克隆）
+python scripts/omni_o_call.py
 ```
 
 ### 格式转换
 
 ```bash
-# 原生 torch → HuggingFace 格式（omni 原生）
+# 原生 torch → HuggingFace 格式（omni 原生 LM）
 python scripts/convert_model.py checkpoint/lm_full_sft_mini/full_sft_128.pth \
                                checkpoint/lm_full_sft_mini/hf \
                                --tokenizer_path checkpoint/tokenizer
@@ -239,6 +251,13 @@ python scripts/convert_model.py checkpoint/omni/omni.pth output_dir --mode qwen 
 # 自动推断 hidden_size / num_hidden_layers、自定义精度
 python scripts/convert_model.py checkpoint/omni/omni.pth output_dir --dtype bfloat16 \
                                --hidden_size 768 --num_hidden_layers 8
+
+# Omni-O（VAM）全文 + 语音/全模态 → HF 格式
+# 自动检测 MoE 架构，含 modeling_omni_o.py 支持 trust_remote_code
+python scripts/convert_omni_o_to_hf.py checkpoint/omni-o/omni-o.pth \
+                                       checkpoint/omni-o-hf
+python scripts/convert_omni_o_to_hf.py checkpoint/omni-o/omni-o_moe.pth \
+                                       checkpoint/omni-o-moe-hf
 ```
 
 > **注意**：`--tokenizer_path` 必须传入**训练时使用的同一个 tokenizer**，否则模型加载后输出乱码（vocab 映射错位）。
