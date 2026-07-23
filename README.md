@@ -229,6 +229,10 @@ All models share the same base LM backbone (hidden_size=768, 8 layers, 8 heads, 
 
 ### Real-time voice/video call
 
+<div align="center">
+  <img src="assets/video_call.png" alt="Omni video call" width="80%">
+</div>
+
 - WebRTC/WebSocket-based streaming
 - VAD with interrupt support
 - ASR (SenseVoice) → generation → TTS pipeline
