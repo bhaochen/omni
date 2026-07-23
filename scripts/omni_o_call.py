@@ -159,16 +159,7 @@ def register_voice(name, value, group='manual'):
         if k != group and name in lst: lst.remove(name)
 
 def voice_args(name):
-    if not name or name == 'default':
-        if VOICES_MANUAL:
-            name = VOICES_MANUAL[0]
-        elif VOICES_BUILTIN:
-            name = VOICES_BUILTIN[0]
-        elif V:
-            name = list(V.keys())[0]
-        else:
-            return {}
-    if name in V:
+    if name and name != 'default' and name in V:
         v = V[name]
         dev = M['device']
         rc = v['ref_codes'].unsqueeze(0).to(dev)
