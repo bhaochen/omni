@@ -161,7 +161,9 @@ def register_voice(name, value, group='manual'):
 def voice_args(name):
     if not name or name == 'default':
         name = VOICES_BUILTIN[0] if VOICES_BUILTIN else (list(V.keys())[0] if V else None)
-    if name and name in V:
+        if name is None:
+            return {}
+    if name in V:
         v = V[name]
         dev = M['device']
         rc = v['ref_codes'].unsqueeze(0).to(dev)
@@ -499,31 +501,6 @@ def init_model(args):
                 if speaker not in V or fn == CLONE_FILE:
                     register_voice(speaker, v, group=group)
     if V: print(f'Loaded {len(V)} voices')
-    if not V and M.get('campplus') and M.get('mimi') and M.get('mel_fn'):
-        try:
-            import struct
-            silence_24k = np.zeros(24000, dtype=np.float32)
-            w24 = torch.tensor(silence_24k)
-            w16 = torch.tensor(np.zeros(16000, dtype=np.float32))
-            mimi_dev = next(M['mimi'].parameters()).device
-            mimi_dtype = torch.float16 if mimi_dev.type != 'cpu' else torch.float32
-            with torch.inference_mode():
-                t = w24.unsqueeze(0).unsqueeze(0).to(device=mimi_dev, dtype=mimi_dtype)
-                codes = M['mimi'].encode(t).audio_codes
-                nf = 1
-                ref_codes = codes[0, :8, :nf].cpu()
-            with torch.no_grad():
-                mel = M['mel_fn'](w16.unsqueeze(0).to(M['device']))
-                feat = mel.clamp(min=1e-10).log().transpose(1, 2)
-                feat = feat - feat.mean(dim=1, keepdim=True)
-                spk_emb = M['campplus'](feat).squeeze(0).cpu()
-            v = {'ref_codes': ref_codes, 'spk_emb': spk_emb}
-            register_voice('default', v, group='builtin')
-            print('Generated default voice from silence')
-        except Exception as e:
-            print(f'Default voice generation failed: {e}')
-    if not V:
-        print('WARNING: No voices loaded. Use Voice Clone to create one.')
 
     print('Warmup...')
     with torch.no_grad():
