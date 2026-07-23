@@ -21,7 +21,7 @@ Train and serve **Language-only (LM)**, **Vision-Language (VLM)**, and **Full Om
 
 ## 📢 News
 
-- **2026-07-23** 🗄️ HF Xet for large files — migrated all checkpoints & dataset (29 GB) to Xet storage; git stores LFS pointers, HF server uses Xet for chunk-dedup transport.
+- **2026-07-23** 🗄️ Checkpoints & dataset moved to HF Buckets — large files (~29 GB) are no longer tracked by git; download via `hf buckets sync` (see below).
 - **2026-07-23** 📦 Omni-O HF conversion — `convert_omni_o_to_hf.py` converts `.pth` checkpoints to HuggingFace format with `trust_remote_code` support; auto-detects MoE vs dense architecture.
 - **2026-07-22** 🎥 Real-time camera + voice — `omni_o_call.py` streams webcam frames and ASR-transcribed voice into the Omni-O model; FP16 NaN guard, VAD-based interrupt, no hardcoded "请描述这张图片".
 - **2026-07-21** 🤗 Published to HF Hub — model code + checkpoints at [chenbhao/omni](https://huggingface.co/chenbhao/omni).
@@ -39,25 +39,22 @@ uv sync
 uv sync --extra rl --extra serve --extra demo
 ```
 
-### HF Xet (faster large-file transfer)
+### Checkpoints & Dataset
 
-Large checkpoint files (`*.pth`, `*.safetensors`, `*.parquet`, etc.) are tracked via Git LFS.
-Install the **git-xet** custom transfer agent to replace the standard LFS protocol with
-Xet's chunk-dedup transport for much faster push/pull:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf \
-  https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
-git xet install
-```
-
-After setup, use normal git workflow — `git-xet` automatically handles LFS objects:
+Large files (`checkpoint/` and `dataset/`) are stored in a
+[HuggingFace Bucket](https://huggingface.co/buckets/chenbhao/omni-checkpoint-dataset).
+They are **not tracked by git** — download them separately:
 
 ```bash
-git lfs pull                    # download all large files
-git add <file> && git commit    # LFS pointer stored in git
-git push                        # Xet protocol uploads actual content
+pip install huggingface-hub    # ensures `hf` CLI is available
+
+# Download both checkpoint and dataset
+hf buckets sync hf://buckets/chenbhao/omni-checkpoint-dataset/checkpoint ./checkpoint
+hf buckets sync hf://buckets/chenbhao/omni-checkpoint-dataset/dataset   ./dataset
 ```
+
+> Buckets use chunk-level deduplication and resume support.
+> Add `--resume` to each command if the download is interrupted.
 
 ## 🚀 Quick Start
 
@@ -242,10 +239,13 @@ All models share the same base LM backbone (hidden_size=768, 8 layers, 8 heads, 
 
 ## 📁 Checkpoints & Dataset
 
-Large files are stored via **HF Xet** — git holds LFS pointers, HF server stores content with chunk-level deduplication.
+Large files are stored in a
+[HuggingFace Bucket](https://huggingface.co/buckets/chenbhao/omni-checkpoint-dataset).
+They are **not tracked by git** — download them with the `hf` CLI:
 
 ```bash
-git lfs pull   # download actual file content
+hf buckets sync hf://buckets/chenbhao/omni-checkpoint-dataset/checkpoint ./checkpoint
+hf buckets sync hf://buckets/chenbhao/omni-checkpoint-dataset/dataset   ./dataset
 ```
 
 | Directory | Contents | Size |
