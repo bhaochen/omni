@@ -84,6 +84,18 @@ select:focus{border-color:#666}
 .hidden{display:none!important}
 .text-muted{color:#888;font-size:.72rem}
 .gap-4{display:flex;gap:4px}
+
+/* voice popup */
+.more-pop{display:none;position:absolute;top:100%;right:0;background:#2a2a30;border:1px solid #444;border-radius:6px;min-width:140px;z-index:50;padding:4px 0;margin-top:4px}
+.more-pop.on{display:block}
+.top-right{position:relative}
+.vgroup{padding:4px 12px;font-size:.62rem;color:#666;text-transform:uppercase;letter-spacing:.5px}
+.vitem{padding:6px 12px;font-size:.78rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.vitem:hover{background:#35353d}
+.vitem.on{color:#4a8aba}
+.vx{color:#d84545;cursor:pointer;font-size:.85rem;padding:0 4px}
+.vadd{padding:6px 12px;font-size:.72rem;cursor:pointer;color:#4a8aba;border-top:1px solid #444;margin-top:4px}
+.vadd:hover{background:#35353d}
 </style>
 </head>
 <body>
@@ -93,7 +105,9 @@ select:focus{border-color:#666}
     <div class="top-right">
       <button class="btn" id="camBtn" onclick="toggleCam()">📷</button>
       <button class="btn" onclick="openCloneModal()">🎙️ Clone</button>
-      <select id="voiceSel" onchange="onVoiceChange()"></select>
+      <button class="btn" id="moreBtn" onclick="morePop.classList.toggle('on')">default</button>
+      <div class="more-pop" id="morePop"></div>
+      <select id="voiceSel" style="display:none"></select>
       <button class="btn" id="modeBtn" onclick="toggleMode()">📞 Call</button>
     </div>
   </div>
@@ -175,6 +189,9 @@ const callBox = $('#callBox')
 const chatInput = $('#chatInput')
 const orb = $('#orb')
 const orbLabel = $('#orbLabel')
+const voiceSel = $('#voiceSel')
+const moreBtn = $('#moreBtn')
+const morePop = $('#morePop')
 const orbInfo = $('#orbInfo')
 const viz = $('#viz')
 const camVideo = $('#camVideo')
@@ -569,25 +586,73 @@ async function deleteVoice() {
   if(!name) return
   try{
     await fetch('/delete_voice', {method:'POST', body:JSON.stringify({name}), headers:{'Content-Type':'application/json'}})
-    loadVoices()
+document.addEventListener('click', e => { if(!e.target.closest('.top-right')) morePop.classList.remove('on') })
+
+loadVoices()
     closeCloneModal()
   }catch(e){}
 }
 
-async function loadVoices() {
+let voiceGroups = {builtin:[], unseen:[], manual:[]}
+
+async function loadVoices(sel) {
   try{
+    const keep = sel || voiceSel.value || 'default'
     const r = await fetch('/voices')
     const d = await r.json()
-    voiceSel.innerHTML = '<option value="default">Default Voice</option>'
-    for(const g of ['builtin','unseen','manual']){
-      for(const v of (d[g]||[])){
-        const o = document.createElement('option')
-        o.value = v; o.textContent = v + (g==='manual'?' ★':'')
-        voiceSel.appendChild(o)
-      }
+    voiceGroups = {builtin:d.builtin||[], unseen:d.unseen||[], manual:d.manual||[]}
+    voiceSel.innerHTML = '<option value="default">default</option>'
+    for(const [label,names] of [['builtin',voiceGroups.builtin],['unseen',voiceGroups.unseen],['manual',voiceGroups.manual]]){
+      if(!names.length) continue
+      const g = document.createElement('optgroup')
+      g.label = label
+      names.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; g.appendChild(o) })
+      voiceSel.appendChild(g)
     }
+    if([...voiceSel.options].some(o => o.value === keep)) voiceSel.value = keep
+    renderVoiceList()
   }catch(e){}
 }
+
+function renderVoiceList() {
+  let h = ''
+  const sel = voiceSel.value
+  moreBtn.textContent = sel
+  h += `<div class="vitem${sel==='default'?' on':''}" data-voice="default">default</div>`
+  for(const [g,ns] of [['builtin',voiceGroups.builtin],['unseen',voiceGroups.unseen],['manual',voiceGroups.manual]]){
+    if(!ns.length) continue
+    h += `<div class="vgroup">${g}</div>`
+    for(const v of ns)
+      h += `<div class="vitem${v===sel?' on':''}" data-voice="${v}"><span>${v}</span>${g==='manual'?`<span class="vx" data-del="${v}">×</span>`:''}</div>`
+  }
+  h += '<div class="vadd">+ clone</div>'
+  morePop.innerHTML = h
+}
+
+morePop.onclick = e => {
+  const item = e.target.closest('[data-voice]')
+  if (item) {
+    voiceSel.value = item.dataset.voice
+    selectedVoice = item.dataset.voice
+    renderVoiceList()
+    morePop.classList.remove('on')
+    return
+  }
+  const del = e.target.closest('[data-del]')
+  if (del) {
+    e.stopPropagation()
+    const name = del.dataset.del
+    if (!confirm('Delete voice: ' + name + '?')) return
+    fetch('/delete_voice', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})})
+      .then(r => r.json()).then(d => { if(!d.ok) throw new Error(d.error); loadVoices(selectedVoice===name?'default':selectedVoice) }).catch(e => alert(e.message))
+    return
+  }
+  if (e.target.classList.contains('vadd')) {
+    morePop.classList.remove('on')
+    openCloneModal()
+  }
+}
+
 loadVoices()
 
 function onVoiceChange() { selectedVoice = voiceSel.value }
