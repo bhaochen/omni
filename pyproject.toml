@@ -23,6 +23,7 @@ dependencies = [
     "pillow>=10.4.0",
     "pyarrow>=17.0.0",
     "requests>=2.32.3",
+    "pydub>=0.25.1",
 ]
 
 [project.optional-dependencies]

@@ -1402,6 +1402,7 @@ dependencies = [
     { name = "pillow" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "pydub" },
     { name = "pyyaml" },
     { name = "regex" },
     { name = "requests" },
@@ -1461,6 +1462,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=17.0.0" },
     { name = "pydantic", specifier = ">=2.11.5" },
     { name = "pydantic", marker = "extra == 'serve'", specifier = ">=2.11.5" },
+    { name = "pydub", specifier = ">=0.25.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "regex" },
     { name = "requests", specifier = ">=2.32.3" },
@@ -2053,6 +2055,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f4/c9/f71032fca47ecc09d30904d9a610234b07139f89eabc2f054b141edcc30f/pydeck-0.9.3.tar.gz", hash = "sha256:695775cbfe51f5fdffbd9735ba469987fdc5efc96bc40a0ee4808170509c78b2", size = 5900912, upload-time = "2026-07-02T23:27:08.704Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6f/34/3998411437aff304a9ed4fa37a6fe1ef3132bcd2b5eac59851b80c86123c/pydeck-0.9.3-py2.py3-none-any.whl", hash = "sha256:d8a47c11c81fb12d51b1feb42427ff4f0e13cb599e48931021b2cba98b6849a6", size = 11428091, upload-time = "2026-07-02T23:27:06.399Z" },
+]
+
+[[package]]
+name = "pydub"
+version = "0.25.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/9a/e6bca0eed82db26562c73b5076539a4a08d3cffd19c3cc5913a3e61145fd/pydub-0.25.1.tar.gz", hash = "sha256:980a33ce9949cab2a569606b65674d748ecbca4f0796887fd6f46173a7b0d30f", size = 38326, upload-time = "2021-03-10T02:09:54.659Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/53/d78dc063216e62fc55f6b2eebb447f6a4b0a59f55c8406376f76bf959b08/pydub-0.25.1-py2.py3-none-any.whl", hash = "sha256:65617e33033874b59d87db603aa1ed450633288aefead953b30bded59cb599a6", size = 32327, upload-time = "2021-03-10T02:09:53.503Z" },
 ]
 
 [[package]]

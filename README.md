@@ -218,12 +218,14 @@ scripts/                # Inference, serving, conversion
 
 ### Trained models
 
-| Model | Params | Modalities | Architecture | Repo |
-|:---|:---|:---|:---|:---|
-| Omni | 4.2B | Text | Dense LM | [🧑‍💻](https://huggingface.co/chenbhao/omni) |
-| Omni-V | 4.4B | Text + Vision | Dense VLM | [🧑‍💻](https://huggingface.co/chenbhao/omni) |
-| Omni-O | 5.6B | Text + Vision + Speech | Dense VAM | [🧑‍💻](https://huggingface.co/chenbhao/omni) |
-| Omni-O MoE | 5.8B | Text + Vision + Speech | MoE VAM | [🧑‍💻](https://huggingface.co/chenbhao/omni) |
+All models share the same base LM backbone (hidden_size=768, 8 layers, 8 heads, GQA).
+
+| Model | Params | Active / token | Modalities | Highlights |
+|:---|---:|---:|:---|:---|
+| Omni | 64M | 64M | Text | Dense LM, tied embeddings, SwiGLU, RoPE |
+| Omni-V | 65M | 65M | Text + Vision | Omni + frozen SigLIP + vision projector |
+| Omni-O | 113M | 113M | Text + Vision + Speech | Omni-V + audio projector + 4-layer Talker |
+| Omni-O MoE | 315M | 113M | Text + Vision + Speech | Omni-O with 4-expert MoE, top-1 routing |
 
 ### Real-time voice/video call
 

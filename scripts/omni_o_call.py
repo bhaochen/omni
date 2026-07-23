@@ -14,6 +14,8 @@ MODEL_LOCK = threading.Lock()
 VOICES_BUILTIN, VOICES_UNSEEN, VOICES_MANUAL = [], [], []
 SAMPLES_PER_FRAME = 1920
 REF_FRAMES = 300
+CLONE_VOICE = 'voice_clone'
+CLONE_FILE = 'voice_clone.pt'
 
 def sse(d): return f"data: {json.dumps(d)}\n\n"
 
@@ -71,6 +73,81 @@ def stream_pcm(frames, flush=False):
             p = pcm_bytes(frames[-(rem + ov):], ov)
             if p: yield p
 
+def clone_voice_path():
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker', CLONE_FILE)
+
+def delete_manual_voice(name):
+    if name not in VOICES_MANUAL:
+        raise RuntimeError('can only delete manually cloned voices')
+    out_path = clone_voice_path()
+    saved = torch.load(out_path, map_location='cpu') if os.path.exists(out_path) else {}
+    if name in saved:
+        saved.pop(name)
+        torch.save(saved, out_path)
+    V.pop(name, None)
+    if name in VOICES_MANUAL:
+        VOICES_MANUAL.remove(name)
+
+def normalize_voice_name(name):
+    name = ' '.join(str(name or '').split())
+    if not name:
+        name = CLONE_VOICE
+    if len(name) > 24:
+        raise RuntimeError('voice name too long (max 24 chars)')
+    if name.lower() == 'default':
+        raise RuntimeError('default is reserved')
+    if name in VOICES_BUILTIN or name in VOICES_UNSEEN:
+        raise RuntimeError('name already taken by an existing voice')
+    return name
+
+def validate_clone_audio(w16):
+    if w16.numel() < int(16000 * 1.8):
+        raise RuntimeError('audio too short, read the full sentence')
+    peak = w16.abs().max().item()
+    frame, hop = 800, 400
+    if w16.numel() >= frame:
+        rms = w16.unfold(0, frame, hop).pow(2).mean(dim=1).sqrt().cpu().numpy()
+    else:
+        rms = np.array([w16.pow(2).mean().sqrt().item()])
+    hi = float(np.quantile(rms, 0.95))
+    lo = float(np.quantile(rms, 0.2))
+    if hi < 0.008:
+        raise RuntimeError('audio too quiet, move closer to mic')
+    if hi > 0 and lo / hi > 0.45:
+        raise RuntimeError('too much background noise')
+    if peak > 0.995:
+        raise RuntimeError('audio clipped, move away from mic')
+
+def build_clone_voice(audio_b64):
+    if M.get('mimi') is None or M.get('campplus') is None or M.get('mel_fn') is None:
+        raise RuntimeError('Mimi or CAM++ not loaded')
+    from pydub import AudioSegment
+    seg = AudioSegment.from_file(io.BytesIO(base64.b64decode(audio_b64))).set_channels(1).set_sample_width(2)
+    if len(seg) < 1000:
+        raise RuntimeError('audio too short, record at least 1 second')
+    try:
+        seg = seg.speedup(playback_speed=1.5, chunk_size=150, crossfade=25)
+    except Exception:
+        seg = seg.speedup(playback_speed=1.5)
+    seg24 = seg.set_frame_rate(24000)
+    seg16 = seg.set_frame_rate(16000)
+    w24 = torch.tensor(np.frombuffer(seg24.raw_data, dtype=np.int16).astype(np.float32) / 32768.0)
+    w16 = torch.tensor(np.frombuffer(seg16.raw_data, dtype=np.int16).astype(np.float32) / 32768.0)
+    validate_clone_audio(w16)
+    mimi_dev = next(M['mimi'].parameters()).device
+    mimi_dtype = torch.float16 if mimi_dev.type != 'cpu' else torch.float32
+    with torch.inference_mode():
+        t = w24.unsqueeze(0).unsqueeze(0).to(device=mimi_dev, dtype=mimi_dtype)
+        codes = M['mimi'].encode(t).audio_codes
+        nf = math.ceil(w24.shape[-1] / SAMPLES_PER_FRAME)
+        ref_codes = codes[0, :8, :nf].cpu()[:, :min(nf, REF_FRAMES)]
+    with torch.no_grad():
+        mel = M['mel_fn'](w16.unsqueeze(0).to(M['device']))
+        feat = mel.clamp(min=1e-10).log().transpose(1, 2)
+        feat = feat - feat.mean(dim=1, keepdim=True)
+        spk_emb = M['campplus'](feat).squeeze(0).cpu()
+    return {'ref_codes': ref_codes, 'spk_emb': spk_emb}
+
 def register_voice(name, value, group='manual'):
     V[name] = value
     groups = {'builtin': VOICES_BUILTIN, 'unseen': VOICES_UNSEEN, 'manual': VOICES_MANUAL}
@@ -80,7 +157,11 @@ def register_voice(name, value, group='manual'):
         if k != group and name in lst: lst.remove(name)
 
 def voice_args(name):
-    if name and name != 'default' and name in V:
+    if not name or name == 'default':
+        name = VOICES_BUILTIN[0] if VOICES_BUILTIN else (list(V.keys())[0] if V else None)
+        if name is None:
+            return {}
+    if name in V:
         v = V[name]
         dev = M['device']
         rc = v['ref_codes'].unsqueeze(0).to(dev)
@@ -137,6 +218,35 @@ def init_web_app():
     @app.route('/models')
     def get_models():
         return json.dumps({'models': [M.get('model_name', 'omni-o')], 'current': M.get('model_name', 'omni-o')})
+
+    @app.route('/clone_voice', methods=['POST'])
+    def clone_voice():
+        d = request.json or {}
+        if not d.get('audio'):
+            return Response(json.dumps({'ok': False, 'error': 'missing audio'}), status=400, mimetype='application/json')
+        try:
+            name = normalize_voice_name(d.get('name'))
+            value = build_clone_voice(d['audio'])
+            out_path = clone_voice_path()
+            saved = torch.load(out_path, map_location='cpu') if os.path.exists(out_path) else {}
+            saved[name] = value
+            torch.save(saved, out_path)
+            register_voice(name, value, group='manual')
+            return Response(json.dumps({'ok': True, 'voice': name, 'path': './model/speaker/' + CLONE_FILE}), mimetype='application/json')
+        except Exception as e:
+            return Response(json.dumps({'ok': False, 'error': str(e)}), status=500, mimetype='application/json')
+
+    @app.route('/delete_voice', methods=['POST'])
+    def delete_voice():
+        d = request.json or {}
+        name = ' '.join(str(d.get('name') or '').split())
+        if not name:
+            return Response(json.dumps({'ok': False, 'error': 'missing name'}), status=400, mimetype='application/json')
+        try:
+            delete_manual_voice(name)
+            return Response(json.dumps({'ok': True, 'voice': name}), mimetype='application/json')
+        except Exception as e:
+            return Response(json.dumps({'ok': False, 'error': str(e)}), status=500, mimetype='application/json')
 
     @app.route('/chat', methods=['POST'])
     def chat():
@@ -381,11 +491,11 @@ def init_model(args):
     M['vad_path'] = os.path.join(root, args.vad_dir, 'silero_vad.onnx')
 
     spk_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker')
-    for fn, group in [('voices.pt', 'builtin'), ('voices_unseen.pt', 'unseen')]:
+    for fn, group in [('voices.pt', 'builtin'), ('voices_unseen.pt', 'unseen'), (CLONE_FILE, 'manual')]:
         fp = os.path.join(spk_dir, fn)
         if os.path.exists(fp):
             for speaker, v in torch.load(fp, map_location='cpu').items():
-                if speaker not in V:
+                if speaker not in V or fn == CLONE_FILE:
                     register_voice(speaker, v, group=group)
     if V: print(f'Loaded {len(V)} voices')
 
@@ -406,7 +516,7 @@ def init_model(args):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description='Omni-O Real-time Voice Call')
-    p.add_argument('--load_from', default='checkpoint/omni-o-hf', help='HF 模型权重目录（自动检测 .pth 目录兼容）')
+    p.add_argument('--load_from', default='checkpoint/omni-o/omni-o-hf', help='HF 模型权重目录（自动检测 .pth 目录兼容）')
     p.add_argument('--weight', default='', help='权重文件名（仅 .pth 模式，不含后缀）')
     p.add_argument('--tokenizer_dir', default='checkpoint/omni/native_hf', help='tokenizer目录')
     p.add_argument('--sensevoice_dir', default='checkpoint/sensevoice', help='SenseVoice ASR目录')
@@ -426,4 +536,5 @@ if __name__ == '__main__':
     init_model(args)
     app = init_web_app()
     print(f'Omni-O Call server started at http://0.0.0.0:{args.port}/')
+    print(f'Open http://127.0.0.1:{args.port} in Firefox for mic/camera access')
     app.run(host='0.0.0.0', port=args.port, threaded=True)
