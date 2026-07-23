@@ -74,7 +74,9 @@ def stream_pcm(frames, flush=False):
             if p: yield p
 
 def clone_voice_path():
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker', CLONE_FILE)
+    p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker', CLONE_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    return p
 
 def delete_manual_voice(name):
     if name not in VOICES_MANUAL:
@@ -491,6 +493,7 @@ def init_model(args):
     M['vad_path'] = os.path.join(root, args.vad_dir, 'silero_vad.onnx')
 
     spk_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'model', 'speaker')
+    os.makedirs(spk_dir, exist_ok=True)
     for fn, group in [('voices.pt', 'builtin'), ('voices_unseen.pt', 'unseen'), (CLONE_FILE, 'manual')]:
         fp = os.path.join(spk_dir, fn)
         if os.path.exists(fp):
