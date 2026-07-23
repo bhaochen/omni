@@ -1,15 +1,3 @@
----
-language: en
-library_name: omni
-tags:
-- llm
-- multimodal
-- vlm
-- vam
-- voice
-- training-framework
----
-
 # Omni: Multimodal LLM Training & Inference Framework
 
 ![Python](https://img.shields.io/badge/-Python-3776AB?style=flat-square&logo=python&logoColor=white)
