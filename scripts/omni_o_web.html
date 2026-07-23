@@ -511,6 +511,12 @@ function closeCloneModal() {
   if(recMediaRec) { recMediaRec.stop(); recMediaRec = null }
 }
 
+function resetRecBtn() {
+  const btn = $('#recBtn')
+  btn.textContent = 'Hold to Record'
+  btn.classList.remove('recording')
+}
+
 let recMediaRec = null, recChunks = []
 function startRec() {
   recChunks = []
@@ -518,11 +524,20 @@ function startRec() {
   btn.textContent = 'Recording...'
   btn.classList.add('recording')
   try{
-    const s = new MediaStream(mic.getAudioTracks())
-    recMediaRec = new MediaRecorder(s, {mimeType:'audio/webm;codecs=opus'})
+    const stream = mic ? new MediaStream(mic.getAudioTracks()) : null
+    if (!stream) {
+      navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(s => {
+        const r = new MediaRecorder(s, {mimeType:'audio/webm;codecs=opus'})
+        recMediaRec = r
+        r.ondataavailable = e => { if(e.data.size) recChunks.push(e.data) }
+        r.start()
+      }).catch(e => { $('#cloneStatus').textContent = 'Record failed: '+e.message; resetRecBtn() })
+      return
+    }
+    recMediaRec = new MediaRecorder(stream, {mimeType:'audio/webm;codecs=opus'})
     recMediaRec.ondataavailable = e => { if(e.data.size) recChunks.push(e.data) }
     recMediaRec.start()
-  }catch(e){ $('#cloneStatus').textContent = 'Record failed: '+e.message }
+  }catch(e){ $('#cloneStatus').textContent = 'Record failed: '+e.message; resetRecBtn() }
 }
 
 async function stopRec() {
