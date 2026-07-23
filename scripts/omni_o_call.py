@@ -160,8 +160,8 @@ def register_voice(name, value, group='manual'):
 
 def voice_args(name):
     if not name or name == 'default':
-        if 'default' in V:
-            name = 'default'
+        if VOICES_MANUAL:
+            name = VOICES_MANUAL[0]
         elif VOICES_BUILTIN:
             name = VOICES_BUILTIN[0]
         elif V:
@@ -506,26 +506,8 @@ def init_model(args):
                 if speaker not in V or fn == CLONE_FILE:
                     register_voice(speaker, v, group=group)
     if V: print(f'Loaded {len(V)} voices')
-    if not V and M.get('campplus') and M.get('mimi'):
-        try:
-            silence_24k = np.zeros(24000, dtype=np.float32)
-            w24 = torch.tensor(silence_24k)
-            w16 = torch.tensor(np.zeros(16000, dtype=np.float32))
-            mimi_dev = next(M['mimi'].parameters()).device
-            mimi_dtype = torch.float16 if mimi_dev.type != 'cpu' else torch.float32
-            with torch.inference_mode():
-                t = w24.unsqueeze(0).unsqueeze(0).to(device=mimi_dev, dtype=mimi_dtype)
-                codes = M['mimi'].encode(t).audio_codes
-                ref_codes = codes[0, :8, :1].cpu()
-            with torch.no_grad():
-                mel = M['mel_fn'](w16.unsqueeze(0).to(M['device']))
-                feat = mel.clamp(min=1e-10).log().transpose(1, 2)
-                feat = feat - feat.mean(dim=1, keepdim=True)
-                spk_emb = M['campplus'](feat).squeeze(0).cpu()
-            register_voice('default', {'ref_codes': ref_codes, 'spk_emb': spk_emb}, group='builtin')
-            print('Generated default voice from silence')
-        except Exception as e:
-            print(f'Default voice generation failed: {e}')
+    if not V:
+        print('No voices loaded. Use Voice Clone to enable audio output.')
 
     print('Warmup...')
     with torch.no_grad():
