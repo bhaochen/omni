@@ -1,0 +1,13 @@
+checkpoint/vad/silero_vad.onnx filter=lfs diff=lfs merge=lfs -text
+checkpoint/vad/silero_vad_v4.onnx filter=lfs diff=lfs merge=lfs -text
+checkpoint/omni-o/omni-o-hf/model.safetensors filter=lfs diff=lfs merge=lfs -text
+checkpoint/omni-o/omni-o-moe-hf/model.safetensors filter=lfs diff=lfs merge=lfs -text
+checkpoint/omni-o/omni-o.pth filter=lfs diff=lfs merge=lfs -text
+checkpoint/omni-o/omni-o_moe.pth filter=lfs diff=lfs merge=lfs -text
+checkpoint/siglip/model.safetensors filter=lfs diff=lfs merge=lfs -text
+checkpoint/sensevoice/chn_jpn_yue_eng_ko_spectok.bpe.model filter=lfs diff=lfs merge=lfs -text
+checkpoint/sensevoice/model.pt filter=lfs diff=lfs merge=lfs -text
+checkpoint/mimi/model.safetensors filter=lfs diff=lfs merge=lfs -text
+checkpoint/campplus/campplus_cn_common.pt filter=lfs diff=lfs merge=lfs -text
+checkpoint/omni/native_hf/model.safetensors filter=lfs diff=lfs merge=lfs -text
+checkpoint/omni/omni.pth filter=lfs diff=lfs merge=lfs -text
